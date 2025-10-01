@@ -146,58 +146,16 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
 
     const retryLibraryLoading = () => {
         setLibsReady(false);
-        console.log('Manually retrying library loading...');
+        console.log('Retrying library loading...');
         
-        // Force reload the problematic libraries
-        if (typeof PptxGenJS === 'undefined') {
-            const pptxScript = document.createElement('script');
-            pptxScript.src = 'https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgenjs.min.js';
-            pptxScript.onload = () => console.log('PptxGenJS manually loaded');
-            pptxScript.onerror = () => console.error('Failed to manually load PptxGenJS');
-            document.head.appendChild(pptxScript);
-        }
-        
-        if (!(window as any).JSONPath) {
-            const jsonPathScript = document.createElement('script');
-            jsonPathScript.src = 'https://unpkg.com/jsonpath-plus@7.2.0/dist/index-browser-umd.min.js';
-            jsonPathScript.onload = () => console.log('JSONPath manually loaded');
-            jsonPathScript.onerror = () => {
-                console.error('Failed to manually load JSONPath, trying alternative...');
-                const altScript = document.createElement('script');
-                altScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/JSONPath/0.11.2/jsonpath.min.js';
-                altScript.onload = () => {
-                    if (typeof JSONPath !== 'undefined' && !(window as any).JSONPath) {
-                        (window as any).JSONPath = { query: JSONPath };
-                    }
-                    console.log('Alternative JSONPath loaded');
-                };
-                document.head.appendChild(altScript);
-            };
-            document.head.appendChild(jsonPathScript);
-        }
-        
-        // Check libraries after a delay
+        // Simply trigger a page refresh to retry loading
         setTimeout(() => {
-            const checkLibraries = () => {
-                const jsonPathExists = !!(window as any).JSONPath || typeof (window as any).jsonPath !== 'undefined';
-                const pptxExists = typeof PptxGenJS !== 'undefined';
-                const reactDomExists = typeof ReactDOM !== 'undefined';
-                
-                console.log('Manual retry check:', {
-                    JSONPath: jsonPathExists,
-                    PptxGenJS: pptxExists,
-                    ReactDOM: reactDomExists
-                });
-                
-                return jsonPathExists && pptxExists && reactDomExists;
-            };
-            
-            if (checkLibraries()) {
-                setLibsReady(true);
+            if (confirm('Retrying library loading. This will refresh the page. Continue?')) {
+                window.location.reload();
             } else {
-                console.log('Libraries still not ready after manual retry');
+                setLibsReady(false);
             }
-        }, 2000);
+        }, 500);
     };
 
     // Poll to check if external libraries are loaded
@@ -208,19 +166,9 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
         }
         
         const checkLibraries = () => {
-            const jsonPathExists = !!(window as any).JSONPath || typeof (window as any).jsonPath !== 'undefined' || typeof (window as any).JSONPath !== 'undefined';
-            const pptxExists = typeof PptxGenJS !== 'undefined' || typeof (window as any).PptxGenJS !== 'undefined';
+            const jsonPathExists = !!(window as any).JSONPath || (window as any).jsonPathLoaded;
+            const pptxExists = typeof PptxGenJS !== 'undefined' || (window as any).pptxLoaded;
             const reactDomExists = typeof ReactDOM !== 'undefined';
-            
-            console.log('Library check:', {
-                JSONPath: jsonPathExists,
-                PptxGenJS: pptxExists,
-                ReactDOM: reactDomExists,
-                windowJSONPath: !!(window as any).JSONPath,
-                windowJsonPath: !!(window as any).jsonPath,
-                globalPptx: typeof PptxGenJS,
-                windowPptx: typeof (window as any).PptxGenJS
-            });
             
             return jsonPathExists && pptxExists && reactDomExists;
         };
@@ -231,34 +179,30 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
         }
         
         let attempts = 0;
-        const maxAttempts = 200; // 20 seconds with 100ms intervals
+        const maxAttempts = 300; // 30 seconds with 100ms intervals
         
         const intervalId = setInterval(() => {
             attempts++;
-            if (checkLibraries()) {
+            const libsReady = checkLibraries();
+            
+            if (libsReady) {
                 setLibsReady(true);
                 clearInterval(intervalId);
                 console.log('All libraries loaded successfully');
             } else if (attempts >= maxAttempts) {
                 clearInterval(intervalId);
-                console.error('Required libraries failed to load after 20 seconds');
-                console.log('Final library state:', {
-                    JSONPath: !!(window as any).JSONPath,
-                    jsonPath: !!(window as any).jsonPath,
-                    PptxGenJS: typeof PptxGenJS,
-                    windowPptxGenJS: typeof (window as any).PptxGenJS,
-                    ReactDOM: typeof ReactDOM
-                });
-                // Try one more manual load attempt
-                setTimeout(() => {
-                    if (!checkLibraries()) {
-                        console.log('Attempting manual library reload...');
-                        // Trigger a page reload as last resort
-                        if (confirm('Required libraries failed to load. Would you like to refresh the page to try again?')) {
-                            window.location.reload();
-                        }
-                    }
-                }, 1000);
+                console.error('Required libraries failed to load after 30 seconds');
+                
+                // Check for specific load errors
+                if ((window as any).pptxLoadError) {
+                    console.error('PptxGenJS failed to load from all sources');
+                }
+                if ((window as any).jsonPathLoadError) {
+                    console.error('JSONPath failed to load from all sources');
+                }
+                
+                // Show user-friendly error message
+                alert('Some required libraries failed to load. This might be due to network issues or content blockers. Please try refreshing the page or check your internet connection.');
             }
         }, 100);
         
@@ -280,26 +224,36 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
 
 
     const getDataByPath = (data: any, path: string) => {
+        // Try different ways JSONPath might be available
         let jsonPathLib = null;
         
-        // Try different ways JSONPath might be available
         if ((window as any).JSONPath && (window as any).JSONPath.query) {
             jsonPathLib = (window as any).JSONPath;
-        } else if ((window as any).JSONPath && typeof (window as any).JSONPath === 'function') {
-            jsonPathLib = { query: (window as any).JSONPath };
-        } else if ((window as any).jsonPath) {
-            jsonPathLib = { query: (window as any).jsonPath };
         } else if (typeof JSONPath !== 'undefined') {
             jsonPathLib = { query: JSONPath };
+        } else if ((window as any).jsonPath) {
+            jsonPathLib = { query: (window as any).jsonPath };
         }
         
         if (!jsonPathLib) {
-            console.error(`JSONPath library not loaded, cannot process path: ${path}`);
-            console.log('Available globals:', {
-                windowJSONPath: typeof (window as any).JSONPath,
-                windowJsonPath: typeof (window as any).jsonPath,
-                globalJSONPath: typeof JSONPath
-            });
+            console.warn(`JSONPath library not available, using fallback for path: ${path}`);
+            // Simple fallback for basic paths
+            try {
+                if (path.startsWith('$.') && !path.includes('[')) {
+                    const pathParts = path.substring(2).split('.');
+                    let result = data;
+                    for (const part of pathParts) {
+                        if (result && typeof result === 'object' && part in result) {
+                            result = result[part];
+                        } else {
+                            return [];
+                        }
+                    }
+                    return Array.isArray(result) ? result : [result];
+                }
+            } catch (e) {
+                console.error(`Fallback path processing failed: ${path}`, e);
+            }
             return [];
         }
         
