@@ -1,0 +1,5 @@
+{
+  "name": "Adventist Church Quarterly Report Generator",
+  "description": "An application to generate professional quarterly reports for various Adventist Church departments. Select a template, fill in the details, and download your report offline.",
+  "requestFramePermissions": []
+}
