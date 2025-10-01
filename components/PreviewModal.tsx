@@ -150,17 +150,38 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
             setLibsReady(false); // Reset when modal closes
             return;
         }
-        if ((window as any).JSONPath) {
+        
+        const checkLibraries = () => {
+            return (window as any).JSONPath && 
+                   typeof PptxGenJS !== 'undefined' && 
+                   typeof ReactDOM !== 'undefined';
+        };
+        
+        if (checkLibraries()) {
             setLibsReady(true);
             return;
         }
+        
         const intervalId = setInterval(() => {
-            if ((window as any).JSONPath) {
+            if (checkLibraries()) {
                 setLibsReady(true);
                 clearInterval(intervalId);
             }
         }, 100);
-        return () => clearInterval(intervalId);
+        
+        // Timeout after 10 seconds
+        const timeoutId = setTimeout(() => {
+            clearInterval(intervalId);
+            if (!checkLibraries()) {
+                console.error('Required libraries failed to load');
+                alert('Required libraries failed to load. Please refresh the page and try again.');
+            }
+        }, 10000);
+        
+        return () => {
+            clearInterval(intervalId);
+            clearTimeout(timeoutId);
+        };
     }, [isOpen]);
 
     const filteredThemes = useMemo(() => {
@@ -267,35 +288,57 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
         });
     }, [activeTemplate, formData, libsReady]);
 
-    const processImage = (base64Image: string): Promise<string> => {
+    const processImage = async (base64Image: string): Promise<string> => {
         if (!useAiFeatures || photoOption === 'original' || !base64Image) {
             return Promise.resolve(base64Image);
         }
-        let prompt = '';
-        if (photoOption === 'enhance') {
-            prompt = 'Auto-enhance this photo to be more vibrant, clear, and well-lit, improving overall quality.';
-        } else if (photoOption === 'removeBg') {
-            prompt = 'Remove the background from this photo, leaving only the main subject with a transparent background.';
+        
+        try {
+            let prompt = '';
+            if (photoOption === 'enhance') {
+                prompt = 'Auto-enhance this photo to be more vibrant, clear, and well-lit, improving overall quality.';
+            } else if (photoOption === 'removeBg') {
+                prompt = 'Remove the background from this photo, leaving only the main subject with a transparent background.';
+            }
+            
+            if (prompt) {
+                return await editImage(base64Image, prompt);
+            }
+            return base64Image;
+        } catch (error) {
+            console.error('Error processing image:', error);
+            return base64Image; // Return original on error
         }
-        return editImage(base64Image, prompt);
     };
 
     const generatePptx = async () => {
         setIsLoading(true);
+        setLoadingMessage('Preparing Presentation...');
         
         const generatedIcons: { [slideId: string]: string } = {};
 
+        // Only generate AI assets if AI features are enabled
         if (useAiFeatures) {
             setLoadingMessage('Generating AI Assets...');
-            const iconGenerationPromises = slides
-                .filter(slide => slide.originalLayout.generativeIconPrompt)
-                .map(async slide => {
-                    const prompt = `${slide.originalLayout.generativeIconPrompt}, in a ${aiVisualStyle} style. Primary color: ${selectedTheme.palette.primary}, accent color: ${selectedTheme.palette.accent}. Transparent background.`;
-                    const icon = await generateContextualImage(prompt);
-                    generatedIcons[slide.id] = icon;
-                });
-            
-            await Promise.all(iconGenerationPromises);
+            try {
+                const iconGenerationPromises = slides
+                    .filter(slide => slide.originalLayout.generativeIconPrompt)
+                    .map(async slide => {
+                        try {
+                            const prompt = `${slide.originalLayout.generativeIconPrompt}, in a ${aiVisualStyle} style. Primary color: ${selectedTheme.palette.primary}, accent color: ${selectedTheme.palette.accent}. Transparent background.`;
+                            const icon = await generateContextualImage(prompt);
+                            generatedIcons[slide.id] = icon;
+                        } catch (error) {
+                            console.error(`Error generating icon for slide ${slide.id}:`, error);
+                            // Continue without icon for this slide
+                        }
+                    });
+                
+                await Promise.all(iconGenerationPromises);
+            } catch (error) {
+                console.error('Error during AI asset generation:', error);
+                // Continue with presentation generation even if AI assets fail
+            }
         }
 
         setLoadingMessage('Assembling Presentation...');
@@ -307,85 +350,127 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
         document.body.appendChild(chartContainer);
 
         try {
+            if (typeof PptxGenJS === 'undefined') {
+                throw new Error('PptxGenJS library not loaded. Please refresh the page and try again.');
+            }
+            
             const pptx = new PptxGenJS();
-            const themeColors = { background: selectedTheme.palette.background.replace('#', ''), text: selectedTheme.palette.foreground.replace('#', ''), primary: selectedTheme.palette.primary.replace('#', ''), secondary: selectedTheme.palette.secondary.replace('#', ''), };
+            const themeColors = { 
+                background: selectedTheme.palette.background.replace('#', ''), 
+                text: selectedTheme.palette.foreground.replace('#', ''), 
+                primary: selectedTheme.palette.primary.replace('#', ''), 
+                secondary: selectedTheme.palette.secondary.replace('#', '') 
+            };
             pptx.defineLayout({ name: 'A4_LANDSCAPE', width: 11.69, height: 8.27 });
             pptx.layout = 'A4_LANDSCAPE';
 
-            for (const slideData of slides) {
-                const slide = pptx.addSlide(); slide.background = { color: themeColors.background };
+            for (let i = 0; i < slides.length; i++) {
+                const slideData = slides[i];
+                setLoadingMessage(`Creating slide ${i + 1} of ${slides.length}...`);
+                
+                try {
+                    const slide = pptx.addSlide(); 
+                    slide.background = { color: themeColors.background };
 
-                if (generatedIcons[slideData.id]) {
-                    slide.addImage({ data: generatedIcons[slideData.id], x: 10.8, y: 0.2, w: 0.6, h: 0.6 });
-                }
+                    // Add generated icon if available
+                    if (useAiFeatures && generatedIcons[slideData.id]) {
+                        try {
+                            slide.addImage({ data: generatedIcons[slideData.id], x: 10.8, y: 0.2, w: 0.6, h: 0.6 });
+                        } catch (error) {
+                            console.error(`Error adding icon to slide ${slideData.id}:`, error);
+                        }
+                    }
 
-                switch (slideData.layout) {
-                    case 'title':
-                        slide.addText(slideData.title, { x: 0.5, y: 3, w: '90%', h: 1, fontSize: 44, bold: true, color: themeColors.primary, fontFace: selectedTheme.fontPair.heading, align: 'center' });
-                        if (slideData.data.subtitle) slide.addText(slideData.data.subtitle, { x: 0.5, y: 4.5, w: '90%', h: 0.5, fontSize: 18, color: themeColors.text, fontFace: selectedTheme.fontPair.body, align: 'center' });
-                        if (slideData.data.author) slide.addText(slideData.data.author, { x: 0.5, y: 5.0, w: '90%', h: 0.5, fontSize: 18, color: themeColors.text, fontFace: selectedTheme.fontPair.body, align: 'center' });
-                        break;
-                    case 'twoColumn':
-                        slide.addText(slideData.title, { x: 0.5, y: 0.25, w: '90%', h: 0.5, fontSize: 28, bold: true, color: themeColors.primary, fontFace: selectedTheme.fontPair.heading });
-                        if (slideData.data.table && slideData.data.table.rows && slideData.data.table.rows.length > 0) {
-                            slide.addTable([slideData.data.table.headers, ...slideData.data.table.rows], { x: 0.5, y: 1.0, w: '90%', border: { pt: 1, color: themeColors.secondary }, color: themeColors.text, fontFace: selectedTheme.fontPair.body, fill: { color: themeColors.background }, autoPage: true });
-                        }
-                        break;
-                    case 'imageLeftTextRight':
-                        slide.addText(slideData.title, { x: 0.5, y: 0.25, w: '90%', h: 0.5, fontSize: 28, bold: true, color: themeColors.primary, fontFace: selectedTheme.fontPair.heading });
-                        if (slideData.data.image) {
-                             const processedImage = await processImage(slideData.data.image);
-                             slide.addImage({ data: processedImage, x: 0.5, y: 1.0, w: 5, h: 6 });
-                        }
-                        if (slideData.data.list && slideData.data.list.length > 0) slide.addText(slideData.data.list, { x: 6.0, y: 1.0, w: 5.19, h: 6, color: themeColors.text, fontFace: selectedTheme.fontPair.body, bullet: true, fontSize: 12 });
-                        break;
-                    case 'summary':
-                        slide.addText(slideData.title, { x: 0.5, y: 0.25, w: '90%', h: 0.5, fontSize: 32, bold: true, color: themeColors.primary, fontFace: selectedTheme.fontPair.heading, align: 'center' });
-                        slideData.data.kpis?.forEach((kpi: any, index: number) => {
-                            const kpiCount = slideData.data.kpis.length;
-                            const boxWidth = (11.69 - 1 - (0.5 * (kpiCount -1))) / kpiCount;
-                            const xPos = 0.5 + index * (boxWidth + 0.5);
-                            slide.addText(String(kpi.value), { x: xPos, y: 3, w: boxWidth, h: 1.5, fontSize: 48, bold: true, color: themeColors.secondary, align: 'center', valign: 'middle' });
-                            slide.addText(kpi.label, { x: xPos, y: 4.5, w: boxWidth, h: 0.5, fontSize: 14, color: themeColors.text, align: 'center', valign: 'top' });
-                        });
-                        break;
-                    case 'photoGrid':
-                        slide.addText(slideData.title, { x: 0.5, y: 0.25, w: '90%', h: 0.5, fontSize: 28, bold: true, color: themeColors.primary, fontFace: selectedTheme.fontPair.heading });
-                        if (slideData.data.images) {
-                            const gridPositions = [ { x: 0.5, y: 1.0, w: 5, h: 3 }, { x: 6.19, y: 1.0, w: 5, h: 3 }, { x: 0.5, y: 4.5, w: 5, h: 3 }, { x: 6.19, y: 4.5, w: 5, h: 3 }, ];
-                            for(let i=0; i < Math.min(slideData.data.images.length, 4); i++) {
-                                const processedImage = await processImage(slideData.data.images[i]);
-                                slide.addImage({ data: processedImage, ...gridPositions[i] });
+                    switch (slideData.layout) {
+                        case 'title':
+                            slide.addText(slideData.title, { x: 0.5, y: 3, w: '90%', h: 1, fontSize: 44, bold: true, color: themeColors.primary, fontFace: selectedTheme.fontPair.heading, align: 'center' });
+                            if (slideData.data.subtitle) slide.addText(slideData.data.subtitle, { x: 0.5, y: 4.5, w: '90%', h: 0.5, fontSize: 18, color: themeColors.text, fontFace: selectedTheme.fontPair.body, align: 'center' });
+                            if (slideData.data.author) slide.addText(slideData.data.author, { x: 0.5, y: 5.0, w: '90%', h: 0.5, fontSize: 18, color: themeColors.text, fontFace: selectedTheme.fontPair.body, align: 'center' });
+                            break;
+                        case 'twoColumn':
+                            slide.addText(slideData.title, { x: 0.5, y: 0.25, w: '90%', h: 0.5, fontSize: 28, bold: true, color: themeColors.primary, fontFace: selectedTheme.fontPair.heading });
+                            if (slideData.data.table && slideData.data.table.rows && slideData.data.table.rows.length > 0) {
+                                slide.addTable([slideData.data.table.headers, ...slideData.data.table.rows], { x: 0.5, y: 1.0, w: '90%', border: { pt: 1, color: themeColors.secondary }, color: themeColors.text, fontFace: selectedTheme.fontPair.body, fill: { color: themeColors.background }, autoPage: true });
                             }
-                        }
-                        break;
-                    case 'chartFull':
-                        slide.addText(slideData.title, { x: 0.5, y: 0.25, w: '90%', h: 0.5, fontSize: 28, bold: true, color: themeColors.primary, fontFace: selectedTheme.fontPair.heading });
-                        
-                        const chartDiv = document.createElement('div');
-                        chartDiv.style.width = '1000px';
-                        chartDiv.style.height = '600px';
-                        chartContainer.appendChild(chartDiv);
-                        
-                        const chartRoot = ReactDOM.createRoot(chartDiv);
-                        await new Promise<void>(resolve => {
-                            chartRoot.render(<ChartSlide slide={slideData} theme={selectedTheme} />);
-                            setTimeout(resolve, 500);
-                        });
+                            break;
+                        case 'imageLeftTextRight':
+                            slide.addText(slideData.title, { x: 0.5, y: 0.25, w: '90%', h: 0.5, fontSize: 28, bold: true, color: themeColors.primary, fontFace: selectedTheme.fontPair.heading });
+                            if (slideData.data.image) {
+                                try {
+                                    const processedImage = await processImage(slideData.data.image);
+                                    slide.addImage({ data: processedImage, x: 0.5, y: 1.0, w: 5, h: 6 });
+                                } catch (error) {
+                                    console.error('Error processing/adding image:', error);
+                                }
+                            }
+                            if (slideData.data.list && slideData.data.list.length > 0) slide.addText(slideData.data.list, { x: 6.0, y: 1.0, w: 5.19, h: 6, color: themeColors.text, fontFace: selectedTheme.fontPair.body, bullet: true, fontSize: 12 });
+                            break;
+                        case 'summary':
+                            slide.addText(slideData.title, { x: 0.5, y: 0.25, w: '90%', h: 0.5, fontSize: 32, bold: true, color: themeColors.primary, fontFace: selectedTheme.fontPair.heading, align: 'center' });
+                            slideData.data.kpis?.forEach((kpi: any, index: number) => {
+                                const kpiCount = slideData.data.kpis.length;
+                                const boxWidth = (11.69 - 1 - (0.5 * (kpiCount -1))) / kpiCount;
+                                const xPos = 0.5 + index * (boxWidth + 0.5);
+                                slide.addText(String(kpi.value), { x: xPos, y: 3, w: boxWidth, h: 1.5, fontSize: 48, bold: true, color: themeColors.secondary, align: 'center', valign: 'middle' });
+                                slide.addText(kpi.label, { x: xPos, y: 4.5, w: boxWidth, h: 0.5, fontSize: 14, color: themeColors.text, align: 'center', valign: 'top' });
+                            });
+                            break;
+                        case 'photoGrid':
+                            slide.addText(slideData.title, { x: 0.5, y: 0.25, w: '90%', h: 0.5, fontSize: 28, bold: true, color: themeColors.primary, fontFace: selectedTheme.fontPair.heading });
+                            if (slideData.data.images) {
+                                const gridPositions = [ { x: 0.5, y: 1.0, w: 5, h: 3 }, { x: 6.19, y: 1.0, w: 5, h: 3 }, { x: 0.5, y: 4.5, w: 5, h: 3 }, { x: 6.19, y: 4.5, w: 5, h: 3 }, ];
+                                for(let imgIndex = 0; imgIndex < Math.min(slideData.data.images.length, 4); imgIndex++) {
+                                    try {
+                                        const processedImage = await processImage(slideData.data.images[imgIndex]);
+                                        slide.addImage({ data: processedImage, ...gridPositions[imgIndex] });
+                                    } catch (error) {
+                                        console.error(`Error processing image ${imgIndex}:`, error);
+                                    }
+                                }
+                            }
+                            break;
+                        case 'chartFull':
+                            slide.addText(slideData.title, { x: 0.5, y: 0.25, w: '90%', h: 0.5, fontSize: 28, bold: true, color: themeColors.primary, fontFace: selectedTheme.fontPair.heading });
+                            
+                            try {
+                                const chartDiv = document.createElement('div');
+                                chartDiv.style.width = '1000px';
+                                chartDiv.style.height = '600px';
+                                chartContainer.appendChild(chartDiv);
+                                
+                                const chartRoot = ReactDOM.createRoot(chartDiv);
+                                await new Promise<void>(resolve => {
+                                    chartRoot.render(<ChartSlide slide={slideData} theme={selectedTheme} />);
+                                    setTimeout(resolve, 500);
+                                });
 
-                        const canvas = chartDiv.querySelector('canvas');
-                        if (canvas) {
-                            const chartImage = canvas.toDataURL('image/png');
-                            slide.addImage({ data: chartImage, x: 1, y: 1, w: 9.69, h: 5.45 });
-                        }
-                        chartContainer.removeChild(chartDiv);
-                        break;
+                                const canvas = chartDiv.querySelector('canvas');
+                                if (canvas) {
+                                    const chartImage = canvas.toDataURL('image/png');
+                                    slide.addImage({ data: chartImage, x: 1, y: 1, w: 9.69, h: 5.45 });
+                                }
+                                chartContainer.removeChild(chartDiv);
+                            } catch (error) {
+                                console.error('Error creating chart:', error);
+                            }
+                            break;
+                    }
+                } catch (error) {
+                    console.error(`Error creating slide ${i + 1}:`, error);
+                    // Continue with next slide
                 }
             }
+            
+            setLoadingMessage('Finalizing presentation...');
             pptx.writeFile({ fileName: `${activeTemplate.key}-presentation.pptx` });
-        } catch (error) { console.error("Error generating PPTX:", error); } finally { 
+        } catch (error) { 
+            console.error("Error generating PPTX:", error);
+            alert("There was an error generating the PowerPoint presentation. Please try again.");
+        } finally { 
             setIsLoading(false); 
-            document.body.removeChild(chartContainer);
+            if (document.body.contains(chartContainer)) {
+                document.body.removeChild(chartContainer);
+            }
         }
     };
     
@@ -719,7 +804,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                 <div className="flex-shrink-0 bg-white/80 backdrop-blur-sm border-t border-gray-300 p-4 flex justify-end items-center gap-3">
                     <button onClick={onClose} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg transition">Cancel</button>
                     <button onClick={generatePptx} disabled={isLoading || !libsReady} className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-6 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
-                        {isLoading ? loadingMessage : 'Export .pptx'}
+                        {isLoading ? loadingMessage : `Export .pptx${!libsReady ? ' (Loading...)' : ''}`}
                     </button>
                 </div>
             </div>

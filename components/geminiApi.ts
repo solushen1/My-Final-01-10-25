@@ -2,8 +2,20 @@
 import { GoogleGenAI, Modality } from '@google/genai';
 
 // In a real-world application, this API key would be on a secure server.
-// For this environment, we assume process.env.API_KEY is available.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// For this environment, we check for API key availability
+let ai: GoogleGenAI | null = null;
+
+try {
+    const apiKey = process.env.API_KEY || import.meta.env.VITE_API_KEY;
+    if (apiKey) {
+        ai = new GoogleGenAI({ apiKey });
+    } else {
+        console.warn('No API key found for Gemini AI. AI features will be disabled.');
+    }
+} catch (error) {
+    console.error('Error initializing Gemini AI:', error);
+    ai = null;
+}
 
 // A simple placeholder base64 image for a generated icon (a light gray star) used as a fallback on error
 const placeholderIconBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAIQSURBVHhe7dixSgNBFAbgeyiCoEWAb5DMFlprL4K9/Bv2Y3kRY8EQBFtLsbFINLSw9zJICYQYAy/8C0fCHYbv8G3YhwBCRESk7Cg49vEJEBEhIiJCRAQEiIhIWb/d/S8eT2f9Op2O6w/XG8ZfA5YgIiJCRESEgIgICBCRkLKv4ChExL/3P44/rX8P/hsCFiAiAmL+y23vYxMREREhIiJCRESAgIgICBCRkLK+P/788v7nj48/3v/4+P3L+8/vN2N/gQYQEREREhIiIHsQEBABAkSkby4+8/Hx+8/3n/9e13/5fP8+vN9fP/7/ffz8/f3l/f0X6AAREREREhIiIHsQEBABAkSkby4+A5YgIiJCRAQECIiIkLK+5A8QEREREhIiQEAECBCRkLKe7AEREREhIiIiQEAECBCRkLK+L50eHq+/v/x8f/355f3Pzzerf/3y/vPN5+9f3n9++f756/vl/fPN959fP/95vxk/A5YgIiJCRAQECIiIkLKe7AEREREhIiIiQEAECBCRkLJ+3d/8+f33N/8Ba/9/AgxAREREhIiIiAC5BwFRESAgIkLASv4B/cNcQ1X4f6wAAAAASUVORK5CYII=";
@@ -16,6 +28,12 @@ const placeholderIconBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGA
  */
 export const generateContextualImage = async (prompt: string): Promise<string> => {
     console.log(`[GEMINI API CALL] Generating image with prompt: "${prompt}"`);
+    
+    if (!ai) {
+        console.warn('Gemini AI not available, using placeholder image');
+        return placeholderIconBase64;
+    }
+    
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash-image-preview',
@@ -50,6 +68,12 @@ export const generateContextualImage = async (prompt: string): Promise<string> =
  */
 export const editImage = async (base64ImageData: string, prompt: string): Promise<string> => {
     console.log(`[GEMINI API CALL] Editing image with prompt: "${prompt}"`);
+    
+    if (!ai) {
+        console.warn('Gemini AI not available, returning original image');
+        return base64ImageData;
+    }
+    
     try {
         const mimeTypeMatch = base64ImageData.match(/data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+).*,.*/);
         if (!mimeTypeMatch || mimeTypeMatch.length < 2) {
