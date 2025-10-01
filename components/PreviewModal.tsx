@@ -827,7 +827,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
 
             const pdfWidth = pdf.internal.pageSize.getWidth();
             const pdfHeight = pdf.internal.pageSize.getHeight();
-            const margin = 15;
+            const margin = 20; // Increased margin to prevent text cutoff
             const contentWidth = pdfWidth - (margin * 2);
 
             let yPosition = margin;
@@ -849,19 +849,18 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                 await Promise.all(imageLoadPromises);
 
                 const canvas = await html2canvas(block, {
-                    scale: 1.5, // Reduced scale for better text rendering
+                    scale: 2, // Higher scale for better quality
                     useCORS: true,
-                    allowTaint: true,
-                    backgroundColor: selectedTheme.palette.background,
-                    width: Math.min(block.scrollWidth, 750), // Reduced width to fit better
+                    backgroundColor: null, // Use a transparent background
+                    width: block.scrollWidth,
                     height: block.scrollHeight,
-                    windowWidth: 750, // Set consistent window width
-                    windowHeight: 1200,
+                    windowWidth: block.scrollWidth,
+                    windowHeight: block.scrollHeight,
                 });
 
                 const imgData = canvas.toDataURL('image/png');
-                const imgWidth = contentWidth;
-                const imgHeight = (canvas.height * contentWidth) / canvas.width;
+                const imgProps = pdf.getImageProperties(imgData);
+                const imgHeight = (imgProps.height * contentWidth) / imgProps.width;
 
                 // Check for page break
                 if (yPosition > margin && yPosition + imgHeight > pdfHeight - margin) {
