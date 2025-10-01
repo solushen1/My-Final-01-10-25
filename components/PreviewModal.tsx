@@ -849,18 +849,19 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                 await Promise.all(imageLoadPromises);
 
                 const canvas = await html2canvas(block, {
-                    scale: 2, // Higher scale for better quality
+                    scale: 1.5, // Reduced scale for better text rendering
                     useCORS: true,
-                    backgroundColor: null, // Use a transparent background
-                    width: block.scrollWidth,
+                    allowTaint: true,
+                    backgroundColor: selectedTheme.palette.background,
+                    width: Math.min(block.scrollWidth, 750), // Reduced width to fit better
                     height: block.scrollHeight,
-                    windowWidth: block.scrollWidth,
-                    windowHeight: block.scrollHeight,
+                    windowWidth: 750, // Set consistent window width
+                    windowHeight: 1200,
                 });
 
                 const imgData = canvas.toDataURL('image/png');
-                const imgProps = pdf.getImageProperties(imgData);
-                const imgHeight = (imgProps.height * contentWidth) / imgProps.width;
+                const imgWidth = contentWidth;
+                const imgHeight = (canvas.height * contentWidth) / canvas.width;
 
                 // Check for page break
                 if (yPosition > margin && yPosition + imgHeight > pdfHeight - margin) {
