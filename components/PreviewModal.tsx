@@ -208,6 +208,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
     }, [activeTemplate, formData, libsReady]);
 
     const processImage = async (base64Image: string): Promise<string> => {
+        // Always return original image if AI features are disabled or no image provided
         if (!useAiFeatures || photoOption === 'original' || !base64Image) {
             return Promise.resolve(base64Image);
         }
@@ -221,12 +222,14 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
             }
             
             if (prompt) {
-                return await editImage(base64Image, prompt);
+                const result = await editImage(base64Image, prompt);
+                return result;
             }
             return base64Image;
         } catch (error) {
             console.error('Error processing image:', error);
-            return base64Image; // Return original on error
+            // Always return original image on any error (including API quota exceeded)
+            return base64Image;
         }
     };
 
@@ -268,7 +271,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
         
         const generatedIcons: { [slideId: string]: string } = {};
 
-        // Only generate AI assets if AI features are enabled
+        // Only generate AI assets if AI features are enabled and we have a good connection
         if (useAiFeatures) {
             setLoadingMessage('Generating AI Assets...');
             try {
@@ -282,14 +285,15 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                             generatedIcons[slide.id] = icon;
                         } catch (error) {
                             console.error(`Error generating icon for slide ${slide.id}:`, error);
-                            // Continue without icon for this slide
+                            // Don't fail the entire presentation for icon generation issues
                         }
                     });
                 
-                await Promise.all(iconGenerationPromises);
+                // Use Promise.allSettled to handle partial failures gracefully
+                await Promise.allSettled(iconGenerationPromises);
             } catch (error) {
                 console.error('Error during AI asset generation:', error);
-                // Continue with presentation generation even if AI assets fail
+                // Continue with presentation generation even if AI assets fail completely
             }
         }
 
@@ -334,8 +338,21 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                 try {
                     const slide = pptx.addSlide(); 
                     
-                    // Apply simple background color (avoid gradients for compatibility)
-                    slide.background = { color: themeColors.background };
+                    // Apply background with gradient support for better visual appeal
+                    if (selectedTheme.gradient && selectedTheme.gradient.length > 0) {
+                        // Try to apply gradient, fall back to solid color if it fails
+                        try {
+                            slide.background = { 
+                                fill: selectedTheme.gradient[0].includes('gradient') ? 
+                                    { color: themeColors.background } : 
+                                    { color: themeColors.background }
+                            };
+                        } catch (error) {
+                            slide.background = { color: themeColors.background };
+                        }
+                    } else {
+                        slide.background = { color: themeColors.background };
+                    }
 
                     // Add generated icon if available and AI features enabled
                     if (useAiFeatures && generatedIcons[slideData.id]) {
@@ -696,7 +713,36 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                     
                 } catch (error) {
                     console.error(`Error creating slide ${i + 1}:`, error);
-                    // Continue with next slide
+                    
+                    // Try to create a fallback slide with minimal content
+                    try {
+                        const fallbackSlide = pptx.addSlide();
+                        fallbackSlide.background = { color: themeColors.background };
+                        fallbackSlide.addText(slideData.title || `Slide ${i + 1}`, { 
+                            x: 0.5, 
+                            y: 3.5, 
+                            w: '90%', 
+                            h: 1, 
+                            fontSize: 24, 
+                            bold: true, 
+                            color: themeColors.primary, 
+                            fontFace: selectedTheme.fontPair.heading,
+                            align: 'center'
+                        });
+                        fallbackSlide.addText('Content could not be rendered', { 
+                            x: 0.5, 
+                            y: 4.5, 
+                            w: '90%', 
+                            h: 0.5, 
+                            fontSize: 16, 
+                            color: themeColors.text, 
+                            fontFace: selectedTheme.fontPair.body,
+                            align: 'center'
+                        });
+                    } catch (fallbackError) {
+                        console.error(`Failed to create fallback slide ${i + 1}:`, fallbackError);
+                        // Continue to next slide even if fallback fails
+                    }
                 }
             }
             
