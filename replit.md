@@ -23,8 +23,17 @@ This application requires a Gemini API key to function. To set it up:
 - The app will be available on port 5000
 - HMR (Hot Module Replacement) is configured for the Replit environment
 
+### Deployment
+- Build command: `npm run build`
+- Preview command: `npm run preview`
+- Deployment type: Autoscale (static site)
+- Make sure to set the `GEMINI_API_KEY` secret in production as well
+
 ## Recent Changes (October 01, 2025)
 - Migrated project to Replit environment
 - Updated Vite config to use port 5000 (required for Replit)
-- Configured HMR for Replit's proxy setup (wss protocol, port 443)
+- Configured HMR for Replit's proxy setup
+- Fixed viewport meta tag in index.html
+- Removed conflicting importmap (using Vite's bundler instead)
+- Configured deployment settings for autoscale
 - Documented project structure and setup requirements
