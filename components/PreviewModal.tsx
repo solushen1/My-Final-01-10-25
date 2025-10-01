@@ -827,7 +827,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
 
             const pdfWidth = pdf.internal.pageSize.getWidth();
             const pdfHeight = pdf.internal.pageSize.getHeight();
-            const margin = 20; // Increased margin to prevent text cutoff
+            const margin = 15;
             const contentWidth = pdfWidth - (margin * 2);
 
             let yPosition = margin;
