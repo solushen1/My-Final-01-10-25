@@ -10,79 +10,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
     
-    <!-- Load PptxGenJS with multiple fallbacks -->
-    <script>
-      (function() {
-        var loadPptxGenJS = function(sources, index) {
-          if (index >= sources.length) {
-            console.error('All PptxGenJS sources failed to load');
-            window.pptxLoadError = true;
-            return;
-          }
-          
-          var script = document.createElement('script');
-          script.src = sources[index];
-          script.onload = function() {
-            console.log('PptxGenJS loaded from:', sources[index]);
-            window.pptxLoaded = true;
-          };
-          script.onerror = function() {
-            console.log('Failed to load PptxGenJS from:', sources[index]);
-            loadPptxGenJS(sources, index + 1);
-          };
-          document.head.appendChild(script);
-        };
-        
-        var pptxSources = [
-          'https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgenjs.min.js',
-          'https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgenjs.min.js',
-          'https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgenjs.min.js'
-        ];
-        
-        loadPptxGenJS(pptxSources, 0);
-      })();
-    </script>
     
-    <!-- Load JSONPath with multiple fallbacks -->
-    <script>
-      (function() {
-        var loadJSONPath = function(sources, index) {
-          if (index >= sources.length) {
-            console.error('All JSONPath sources failed to load');
-            window.jsonPathLoadError = true;
-            return;
-          }
-          
-          var script = document.createElement('script');
-          script.src = sources[index];
-          script.onload = function() {
-            console.log('JSONPath loaded from:', sources[index]);
-            
-            // Normalize JSONPath interface
-            if (typeof JSONPath !== 'undefined' && !window.JSONPath) {
-              window.JSONPath = { query: JSONPath };
-            } else if (typeof jsonPath !== 'undefined' && !window.JSONPath) {
-              window.JSONPath = { query: jsonPath.query || jsonPath };
-            }
-            
-            window.jsonPathLoaded = true;
-          };
-          script.onerror = function() {
-            console.log('Failed to load JSONPath from:', sources[index]);
-            loadJSONPath(sources, index + 1);
-          };
-          document.head.appendChild(script);
-        };
-        
-        var jsonPathSources = [
-          'https://cdn.jsdelivr.net/npm/jsonpath-plus@7.2.0/dist/index-browser-umd.min.js',
-          'https://unpkg.com/jsonpath-plus@7.2.0/dist/index-browser-umd.min.js',
-          'https://cdnjs.cloudflare.com/ajax/libs/JSONPath/0.11.2/jsonpath.min.js'
-        ];
-        
-        loadJSONPath(jsonPathSources, 0);
-      })();
-    </script>
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&family=Roboto:wght@400;500;700&family=Playfair+Display:wght@700&family=Lato:wght@400;700&family=Cormorant+Garamond:wght@700&family=Montserrat:wght@400;500&family=Lora:wght@700&family=Open+Sans:wght@400;700&family=Poppins:wght@700&display=swap');
       

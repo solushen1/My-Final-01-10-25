@@ -16,9 +16,11 @@ import SummarySlide from './slide_layouts/SummarySlide';
 import PhotoGridSlide from './slide_layouts/PhotoGridSlide';
 import ChartSlide from './slide_layouts/ChartSlide';
 
+// Import local libraries
+import PptxGenJS from 'pptxgenjs';
+import { JSONPath } from 'jsonpath-plus';
 
 declare const jspdf: any;
-declare const PptxGenJS: any;
 declare const html2canvas: any;
 
 interface PreviewModalProps {
@@ -144,21 +146,9 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
         }
     };
 
-    const retryLibraryLoading = () => {
-        setLibsReady(false);
-        console.log('Retrying library loading...');
-        
-        // Simply trigger a page refresh to retry loading
-        setTimeout(() => {
-            if (confirm('Retrying library loading. This will refresh the page. Continue?')) {
-                window.location.reload();
-            } else {
-                setLibsReady(false);
-            }
-        }, 500);
-    };
+    
 
-    // Poll to check if external libraries are loaded
+    // Check if local libraries are available
     useEffect(() => {
         if (!isOpen) {
             setLibsReady(false); // Reset when modal closes
@@ -166,49 +156,36 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
         }
         
         const checkLibraries = () => {
-            const jsonPathExists = !!(window as any).JSONPath || (window as any).jsonPathLoaded;
-            const pptxExists = typeof PptxGenJS !== 'undefined' || (window as any).pptxLoaded;
+            const jsonPathExists = typeof JSONPath !== 'undefined';
+            const pptxExists = typeof PptxGenJS !== 'undefined';
             const reactDomExists = typeof ReactDOM !== 'undefined';
+            
+            console.log('Library check:', {
+                JSONPath: jsonPathExists,
+                PptxGenJS: pptxExists,
+                ReactDOM: reactDomExists
+            });
             
             return jsonPathExists && pptxExists && reactDomExists;
         };
         
+        // Since we're importing libraries directly, they should be available immediately
         if (checkLibraries()) {
             setLibsReady(true);
-            return;
+            console.log('All libraries loaded successfully');
+        } else {
+            console.error('Required libraries not available');
+            // Try again after a short delay in case of import timing issues
+            setTimeout(() => {
+                if (checkLibraries()) {
+                    setLibsReady(true);
+                    console.log('All libraries loaded successfully (after retry)');
+                } else {
+                    console.error('Libraries still not available after retry');
+                    alert('Required libraries are not available. Please refresh the page and try again.');
+                }
+            }, 1000);
         }
-        
-        let attempts = 0;
-        const maxAttempts = 300; // 30 seconds with 100ms intervals
-        
-        const intervalId = setInterval(() => {
-            attempts++;
-            const libsReady = checkLibraries();
-            
-            if (libsReady) {
-                setLibsReady(true);
-                clearInterval(intervalId);
-                console.log('All libraries loaded successfully');
-            } else if (attempts >= maxAttempts) {
-                clearInterval(intervalId);
-                console.error('Required libraries failed to load after 30 seconds');
-                
-                // Check for specific load errors
-                if ((window as any).pptxLoadError) {
-                    console.error('PptxGenJS failed to load from all sources');
-                }
-                if ((window as any).jsonPathLoadError) {
-                    console.error('JSONPath failed to load from all sources');
-                }
-                
-                // Show user-friendly error message
-                alert('Some required libraries failed to load. This might be due to network issues or content blockers. Please try refreshing the page or check your internet connection.');
-            }
-        }, 100);
-        
-        return () => {
-            clearInterval(intervalId);
-        };
     }, [isOpen]);
 
     const filteredThemes = useMemo(() => {
@@ -224,18 +201,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
 
 
     const getDataByPath = (data: any, path: string) => {
-        // Try different ways JSONPath might be available
-        let jsonPathLib = null;
-        
-        if ((window as any).JSONPath && (window as any).JSONPath.query) {
-            jsonPathLib = (window as any).JSONPath;
-        } else if (typeof JSONPath !== 'undefined') {
-            jsonPathLib = { query: JSONPath };
-        } else if ((window as any).jsonPath) {
-            jsonPathLib = { query: (window as any).jsonPath };
-        }
-        
-        if (!jsonPathLib) {
+        if (typeof JSONPath === 'undefined') {
             console.warn(`JSONPath library not available, using fallback for path: ${path}`);
             // Simple fallback for basic paths
             try {
@@ -258,7 +224,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
         }
         
         try {
-            const result = jsonPathLib.query(data, path);
+            const result = JSONPath({ path: path, json: data });
             return result && result.length > 0 ? result : [];
         } catch (e) {
             console.error(`Error processing JSONPath: ${path}`, e);
@@ -408,10 +374,10 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
         try {
             // Final check for libraries before generation
             if (typeof PptxGenJS === 'undefined') {
-                throw new Error('PptxGenJS library not loaded. Please refresh the page and try again.');
+                throw new Error('PptxGenJS library not available. Please refresh the page and try again.');
             }
-            if (!(window as any).JSONPath) {
-                throw new Error('JSONPath library not loaded. Please refresh the page and try again.');
+            if (typeof JSONPath === 'undefined') {
+                throw new Error('JSONPath library not available. Please refresh the page and try again.');
             }
             
             const pptx = new PptxGenJS();
@@ -861,14 +827,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                     </div>
                 </div>
 
-                <div className="flex-shrink-0 bg-white/80 backdrop-blur-sm border-t border-gray-300 p-4 flex justify-between items-center">
-                    <div>
-                        {!libsReady && !isLoading && (
-                            <button onClick={retryLibraryLoading} className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition text-sm">
-                                Retry Loading Libraries
-                            </button>
-                        )}
-                    </div>
+                <div className="flex-shrink-0 bg-white/80 backdrop-blur-sm border-t border-gray-300 p-4 flex justify-end items-center">
                     <div className="flex gap-3">
                         <button onClick={onClose} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg transition">Cancel</button>
                         <button onClick={generatePptx} disabled={isLoading || !libsReady} className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-6 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
