@@ -144,6 +144,34 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
         }
     };
 
+    const retryLibraryLoading = () => {
+        setLibsReady(false);
+        // Trigger the useEffect to recheck libraries
+        const checkLibraries = () => {
+            const jsonPathExists = !!(window as any).JSONPath;
+            const pptxExists = typeof PptxGenJS !== 'undefined';
+            const reactDomExists = typeof ReactDOM !== 'undefined';
+            
+            console.log('Manual library check:', {
+                JSONPath: jsonPathExists,
+                PptxGenJS: pptxExists,
+                ReactDOM: reactDomExists
+            });
+            
+            return jsonPathExists && pptxExists && reactDomExists;
+        };
+        
+        if (checkLibraries()) {
+            setLibsReady(true);
+        } else {
+            setTimeout(() => {
+                if (checkLibraries()) {
+                    setLibsReady(true);
+                }
+            }, 1000);
+        }
+    };
+
     // Poll to check if external libraries are loaded
     useEffect(() => {
         if (!isOpen) {
@@ -152,9 +180,17 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
         }
         
         const checkLibraries = () => {
-            return (window as any).JSONPath && 
-                   typeof PptxGenJS !== 'undefined' && 
-                   typeof ReactDOM !== 'undefined';
+            const jsonPathExists = !!(window as any).JSONPath;
+            const pptxExists = typeof PptxGenJS !== 'undefined';
+            const reactDomExists = typeof ReactDOM !== 'undefined';
+            
+            console.log('Library check:', {
+                JSONPath: jsonPathExists,
+                PptxGenJS: pptxExists,
+                ReactDOM: reactDomExists
+            });
+            
+            return jsonPathExists && pptxExists && reactDomExists;
         };
         
         if (checkLibraries()) {
@@ -162,25 +198,24 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
             return;
         }
         
+        let attempts = 0;
+        const maxAttempts = 100; // 10 seconds with 100ms intervals
+        
         const intervalId = setInterval(() => {
+            attempts++;
             if (checkLibraries()) {
                 setLibsReady(true);
                 clearInterval(intervalId);
+                console.log('All libraries loaded successfully');
+            } else if (attempts >= maxAttempts) {
+                clearInterval(intervalId);
+                console.error('Required libraries failed to load after 10 seconds');
+                // Don't show alert immediately, user might try again
             }
         }, 100);
         
-        // Timeout after 10 seconds
-        const timeoutId = setTimeout(() => {
-            clearInterval(intervalId);
-            if (!checkLibraries()) {
-                console.error('Required libraries failed to load');
-                alert('Required libraries failed to load. Please refresh the page and try again.');
-            }
-        }, 10000);
-        
         return () => {
             clearInterval(intervalId);
-            clearTimeout(timeoutId);
         };
     }, [isOpen]);
 
@@ -350,8 +385,12 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
         document.body.appendChild(chartContainer);
 
         try {
+            // Final check for libraries before generation
             if (typeof PptxGenJS === 'undefined') {
                 throw new Error('PptxGenJS library not loaded. Please refresh the page and try again.');
+            }
+            if (!(window as any).JSONPath) {
+                throw new Error('JSONPath library not loaded. Please refresh the page and try again.');
             }
             
             const pptx = new PptxGenJS();
@@ -801,11 +840,20 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                     </div>
                 </div>
 
-                <div className="flex-shrink-0 bg-white/80 backdrop-blur-sm border-t border-gray-300 p-4 flex justify-end items-center gap-3">
-                    <button onClick={onClose} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg transition">Cancel</button>
-                    <button onClick={generatePptx} disabled={isLoading || !libsReady} className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-6 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
-                        {isLoading ? loadingMessage : `Export .pptx${!libsReady ? ' (Loading...)' : ''}`}
-                    </button>
+                <div className="flex-shrink-0 bg-white/80 backdrop-blur-sm border-t border-gray-300 p-4 flex justify-between items-center">
+                    <div>
+                        {!libsReady && !isLoading && (
+                            <button onClick={retryLibraryLoading} className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition text-sm">
+                                Retry Loading Libraries
+                            </button>
+                        )}
+                    </div>
+                    <div className="flex gap-3">
+                        <button onClick={onClose} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg transition">Cancel</button>
+                        <button onClick={generatePptx} disabled={isLoading || !libsReady} className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-6 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
+                            {isLoading ? loadingMessage : !libsReady ? 'Loading Libraries...' : 'Export .pptx'}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
