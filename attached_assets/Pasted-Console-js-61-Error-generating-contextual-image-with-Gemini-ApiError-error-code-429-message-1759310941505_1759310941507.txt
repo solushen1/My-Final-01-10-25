@@ -1,0 +1,19 @@
+Console.js:61 Error generating contextual image with Gemini: ApiError: {"error":{"code":429,"message":"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits.\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0\nPlease retry in 37.807287529s.","status":"RESOURCE_EXHAUSTED","details":[{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_requests","quotaId":"GenerateRequestsPerDayPerProjectPerModel-FreeTier","quotaDimensions":{"model":"gemini-2.5-flash-preview-image","location":"global"}},{"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_requests","quotaId":"GenerateRequestsPerMinutePerProjectPerModel-FreeTier","quotaDimensions":{"model":"gemini-2.5-flash-preview-image","location":"global"}},{"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_input_token_count","quotaId":"GenerateContentInputTokensPerModelPerMinute-FreeTier","quotaDimensions":{"location":"global","model":"gemini-2.5-flash-preview-image"}}]},{"@type":"type.googleapis.com/google.rpc.Help","links":[{"description":"Learn more about Gemini API quotas","url":"https://ai.google.dev/gemini-api/docs/rate-limits"}]},{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"37s"}]}}
+    at async generateContextualImage (geminiApi.ts:38:26)
+    at async PreviewModal.tsx:284:42
+    at async Promise.allSettled (f80751e8-b30c-42ed-9…ev/__replco/index 1)
+    at async generatePptx (PreviewModal.tsx:293:17)
+Console.js:61 Error creating slide 2: TypeError: Cannot create property 'options' on string 'Leader: '
+    at generatePptx (PreviewModal.tsx:515:39)
+Mt.forEach.n.<computed>	@	Console.js:61
+pptxgenjs.js?v=025a5237:3015 Uncaught (in promise) TypeError: (colorStr || "").replace is not a function
+    at createColorElement (pptxgenjs.js?v=025a5237:3015:35)
+    at genXmlColorSelection (pptxgenjs.js?v=025a5237:3055:36)
+    at slideObjectToXml (pptxgenjs.js?v=025a5237:6100:37)
+    at makeXmlSlide (pptxgenjs.js?v=025a5237:7087:375)
+    at pptxgenjs.js?v=025a5237:7410:54
+    at Array.forEach (<anonymous>)
+    at PptxGenJS.<anonymous> (pptxgenjs.js?v=025a5237:7409:21)
+    at Generator.next (<anonymous>)
+    at pptxgenjs.js?v=025a5237:2399:67
+    at new Promise (<anonymous>)
