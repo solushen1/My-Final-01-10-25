@@ -788,7 +788,7 @@ const App: React.FC = () => {
                     <div className="space-y-12">
                         <div className="flex flex-col md:flex-row items-center gap-8 md:gap-12">
                             <div className="md:w-1/2 text-center md:text-left">
-                                <img src="https://picsum.photos/seed/adventistreport/600/400" alt="Professional workspace" className="rounded-lg shadow-lg mb-6 w-full"/>
+                                <img src="./attached_assets/Board 3.419Z_1759314367072.png" alt="Professional workspace meeting room" className="rounded-lg shadow-lg mb-6 w-full"/>
                                 <h2 className="text-3xl font-bold text-[var(--brand-teal)]">Reporting with ease...</h2>
                                 <p className="text-gray-600 my-4">
                                     Welcome to your quarterly report tool. Just select your template, fill in your data, generate your pdf, and you are done.
