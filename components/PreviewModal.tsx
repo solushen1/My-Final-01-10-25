@@ -415,30 +415,8 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                 try {
                     const slide = pptx.addSlide(); 
                     
-                    // Apply theme background with gradient support
-                    if (selectedTheme.gradient && selectedTheme.gradient.length > 0) {
-                        // Extract gradient colors for PowerPoint
-                        const gradientStr = String(selectedTheme.gradient[0] || '');
-                        const gradientMatch = gradientStr.match(/linear-gradient\([^,]+,\s*([^,]+),\s*([^)]+)\)/);
-                        if (gradientMatch) {
-                            const color1 = sanitizeColor(gradientMatch[1].trim(), 'FFFFFF');
-                            const color2 = sanitizeColor(gradientMatch[2].trim(), 'FFFFFF');
-                            slide.background = { 
-                                fill: {
-                                    type: 'gradient',
-                                    angle: 45,
-                                    colors: [
-                                        { color: color1, position: 0 },
-                                        { color: color2, position: 100 }
-                                    ]
-                                }
-                            };
-                        } else {
-                            slide.background = { color: themeColors.background };
-                        }
-                    } else {
-                        slide.background = { color: themeColors.background };
-                    }
+                    // Apply simple background color (avoid gradients for compatibility)
+                    slide.background = { color: themeColors.background };
 
                     // Add generated icon if available and AI features enabled
                     if (useAiFeatures && generatedIcons[slideData.id]) {
@@ -468,8 +446,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                 bold: true, 
                                 color: themeColors.primary, 
                                 fontFace: selectedTheme.fontPair.heading, 
-                                align: 'center',
-                                shadow: { type: 'outer', blur: 3, offset: 2, angle: 45, color: '888888', opacity: 0.6 }
+                                align: 'center'
                             });
                             if (slideData.data.subtitle) {
                                 slide.addText(slideData.data.subtitle, { 
@@ -518,7 +495,6 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                     color: themeColors.text,
                                     fontFace: selectedTheme.fontPair.body,
                                     fontSize: 12,
-                                    fill: themeColors.background,
                                     autoPage: true,
                                     rowH: 0.4,
                                     colW: 'auto'
@@ -531,16 +507,13 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                         options: { 
                                             bold: true, 
                                             color: themeColors.primary,
-                                            fill: themeColors.accent,
                                             fontFace: selectedTheme.fontPair.heading
                                         }
                                     })),
                                     ...slideData.data.table.rows.map((row: string[], index: number) => 
                                         row.map((cell: string) => ({
                                             text: cell,
-                                            options: {
-                                                fill: index % 2 === 0 ? themeColors.background : themeColors.accent
-                                            }
+                                            options: {}
                                         }))
                                     )
                                 ];
@@ -569,15 +542,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                         y: 1.2, 
                                         w: 5.5, 
                                         h: 5.8,
-                                        rounding: selectedTheme.category === 'Modern',
-                                        shadow: selectedTheme.category === 'Traditional' ? { 
-                                            type: 'outer', 
-                                            blur: 8, 
-                                            offset: 4, 
-                                            angle: 45, 
-                                            color: '666666', 
-                                            opacity: 0.5 
-                                        } : undefined
+                                        rounding: selectedTheme.category === 'Modern'
                                     });
                                 } catch (error) {
                                     console.error('Error processing/adding image:', error);
@@ -622,9 +587,8 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                         y: 2.8,
                                         w: boxWidth + 0.2,
                                         h: 2.5,
-                                        fill: themeColors.accent,
-                                        line: { color: themeColors.secondary, width: 2 },
-                                        shadow: { type: 'outer', blur: 6, offset: 3, angle: 45, color: '999999', opacity: 0.4 }
+                                        fill: { color: themeColors.accent },
+                                        line: { color: themeColors.secondary, width: 2 }
                                     });
                                 }
                                 
@@ -679,15 +643,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                         slide.addImage({ 
                                             data: processedImage, 
                                             ...gridPositions[imgIndex],
-                                            rounding: selectedTheme.category === 'Modern',
-                                            shadow: selectedTheme.category === 'Traditional' ? { 
-                                                type: 'outer', 
-                                                blur: 6, 
-                                                offset: 3, 
-                                                angle: 45, 
-                                                color: '888888', 
-                                                opacity: 0.5 
-                                            } : undefined
+                                            rounding: selectedTheme.category === 'Modern'
                                         });
                                     } catch (error) {
                                         console.error(`Error processing image ${imgIndex}:`, error);
@@ -730,14 +686,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                         y: 1.2, 
                                         w: 9.69, 
                                         h: 5.8,
-                                        shadow: selectedTheme.category === 'Traditional' ? { 
-                                            type: 'outer', 
-                                            blur: 8, 
-                                            offset: 4, 
-                                            angle: 45, 
-                                            color: '777777', 
-                                            opacity: 0.4 
-                                        } : undefined
+                                        
                                     });
                                 }
                                 chartRoot.unmount();
