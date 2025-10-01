@@ -333,6 +333,14 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
         }
     };
 
+    // Helper function to ensure colors are valid strings for PptxGenJS
+    const sanitizeColor = (color: any, fallback: string = 'FFFFFF'): string => {
+        if (typeof color !== 'string') {
+            return fallback;
+        }
+        return color.replace('#', '').substring(0, 6); // Remove # and limit to 6 chars
+    };
+
     const generatePptx = async () => {
         setIsLoading(true);
         setLoadingMessage('Preparing Presentation...');
@@ -382,13 +390,13 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
             
             const pptx = new PptxGenJS();
             
-            // Apply theme colors properly
+            // Apply theme colors properly - ensure all colors are valid strings for PptxGenJS
             const themeColors = { 
-                background: selectedTheme.palette.background.replace('#', ''), 
-                text: selectedTheme.palette.foreground.replace('#', ''), 
-                primary: selectedTheme.palette.primary.replace('#', ''), 
-                secondary: selectedTheme.palette.secondary.replace('#', ''),
-                accent: selectedTheme.palette.accent.replace('#', '')
+                background: sanitizeColor(selectedTheme.palette.background, 'FFFFFF'), 
+                text: sanitizeColor(selectedTheme.palette.foreground, '000000'), 
+                primary: sanitizeColor(selectedTheme.palette.primary, '000080'), 
+                secondary: sanitizeColor(selectedTheme.palette.secondary, '808080'),
+                accent: sanitizeColor(selectedTheme.palette.accent, 'FF6600')
             };
             
             pptx.defineLayout({ name: 'A4_LANDSCAPE', width: 11.69, height: 8.27 });
@@ -410,10 +418,11 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                     // Apply theme background with gradient support
                     if (selectedTheme.gradient && selectedTheme.gradient.length > 0) {
                         // Extract gradient colors for PowerPoint
-                        const gradientMatch = selectedTheme.gradient[0].match(/linear-gradient\([^,]+,\s*([^,]+),\s*([^)]+)\)/);
+                        const gradientStr = String(selectedTheme.gradient[0] || '');
+                        const gradientMatch = gradientStr.match(/linear-gradient\([^,]+,\s*([^,]+),\s*([^)]+)\)/);
                         if (gradientMatch) {
-                            const color1 = gradientMatch[1].trim().replace('#', '');
-                            const color2 = gradientMatch[2].trim().replace('#', '');
+                            const color1 = sanitizeColor(gradientMatch[1].trim(), 'FFFFFF');
+                            const color2 = sanitizeColor(gradientMatch[2].trim(), 'FFFFFF');
                             slide.background = { 
                                 fill: {
                                     type: 'gradient',
