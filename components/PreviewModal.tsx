@@ -518,7 +518,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                     color: themeColors.text,
                                     fontFace: selectedTheme.fontPair.body,
                                     fontSize: 12,
-                                    fill: { color: themeColors.background },
+                                    fill: themeColors.background,
                                     autoPage: true,
                                     rowH: 0.4,
                                     colW: 'auto'
@@ -531,7 +531,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                         options: { 
                                             bold: true, 
                                             color: themeColors.primary,
-                                            fill: { color: themeColors.accent },
+                                            fill: themeColors.accent,
                                             fontFace: selectedTheme.fontPair.heading
                                         }
                                     })),
@@ -539,7 +539,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                         row.map((cell: string) => ({
                                             text: cell,
                                             options: {
-                                                fill: { color: index % 2 === 0 ? themeColors.background : `${themeColors.accent}40` }
+                                                fill: index % 2 === 0 ? themeColors.background : themeColors.accent
                                             }
                                         }))
                                     )
@@ -622,7 +622,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                         y: 2.8,
                                         w: boxWidth + 0.2,
                                         h: 2.5,
-                                        fill: { color: `${themeColors.accent}20` },
+                                        fill: themeColors.accent,
                                         line: { color: themeColors.secondary, width: 2 },
                                         shadow: { type: 'outer', blur: 6, offset: 3, angle: 45, color: '999999', opacity: 0.4 }
                                     });
