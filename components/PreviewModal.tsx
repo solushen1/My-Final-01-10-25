@@ -335,10 +335,34 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
 
     // Helper function to ensure colors are valid strings for PptxGenJS
     const sanitizeColor = (color: any, fallback: string = 'FFFFFF'): string => {
-        if (typeof color !== 'string') {
+        if (typeof color !== 'string' || !color) {
             return fallback;
         }
-        return color.replace('#', '').substring(0, 6); // Remove # and limit to 6 chars
+        // Handle hex colors
+        if (color.startsWith('#')) {
+            return color.substring(1, 7); // Remove # and limit to 6 chars
+        }
+        // Handle rgb/rgba colors - convert to hex
+        if (color.startsWith('rgb')) {
+            try {
+                const rgbValues = color.match(/\d+/g);
+                if (rgbValues && rgbValues.length >= 3) {
+                    const r = parseInt(rgbValues[0]);
+                    const g = parseInt(rgbValues[1]);
+                    const b = parseInt(rgbValues[2]);
+                    return ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
+                }
+            } catch (e) {
+                console.error('Error converting RGB to hex:', e);
+            }
+            return fallback;
+        }
+        // If it's already a hex string without #
+        if (/^[0-9A-Fa-f]{6}$/.test(color)) {
+            return color;
+        }
+        // For any other format, use fallback
+        return fallback;
     };
 
     const generatePptx = async () => {
@@ -355,7 +379,8 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                     .filter(slide => slide.originalLayout.generativeIconPrompt)
                     .map(async slide => {
                         try {
-                            const prompt = `${slide.originalLayout.generativeIconPrompt}, in a ${aiVisualStyle} style. Primary color: ${selectedTheme.palette.primary}, accent color: ${selectedTheme.palette.accent}. Transparent background.`;
+                            const themeStyle = selectedTheme.category === 'Modern' ? 'modern, clean, geometric' : 'traditional, classic, elegant';
+                            const prompt = `${slide.originalLayout.generativeIconPrompt}, in a ${aiVisualStyle} and ${themeStyle} style. Use colors inspired by ${selectedTheme.palette.primary} and ${selectedTheme.palette.accent}. Professional presentation icon with transparent background. High quality, simple, clear design suitable for PowerPoint.`;
                             const icon = await generateContextualImage(prompt);
                             generatedIcons[slide.id] = icon;
                         } catch (error) {
@@ -423,11 +448,12 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                         try {
                             slide.addImage({ 
                                 data: generatedIcons[slideData.id], 
-                                x: 10.8, 
-                                y: 0.2, 
-                                w: 0.6, 
-                                h: 0.6,
-                                transparency: 10
+                                x: selectedTheme.category === 'Modern' ? 10.5 : 10.8, 
+                                y: selectedTheme.category === 'Modern' ? 0.1 : 0.2, 
+                                w: selectedTheme.category === 'Modern' ? 0.8 : 0.6, 
+                                h: selectedTheme.category === 'Modern' ? 0.8 : 0.6,
+                                transparency: selectedTheme.category === 'Modern' ? 15 : 10,
+                                rounding: selectedTheme.category === 'Modern'
                             });
                         } catch (error) {
                             console.error(`Error adding icon to slide ${slideData.id}:`, error);
@@ -436,41 +462,68 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
 
                     switch (slideData.layout) {
                         case 'title':
-                            // Apply theme-specific title styling
+                            // Apply theme-specific title styling with enhanced visual design
+                            const titleY = selectedTheme.category === 'Modern' ? 2.8 : 2.5;
+                            const titleFontSize = selectedTheme.category === 'Modern' ? 52 : 44;
+                            
+                            // Add background decoration for Modern themes
+                            if (selectedTheme.category === 'Modern') {
+                                slide.addShape('rect', {
+                                    x: 1,
+                                    y: titleY - 0.3,
+                                    w: 9.69,
+                                    h: 0.1,
+                                    fill: themeColors.accent,
+                                    line: { width: 0 }
+                                });
+                            }
+                            
                             slide.addText(slideData.title, { 
                                 x: 0.5, 
-                                y: 2.5, 
+                                y: titleY, 
                                 w: '90%', 
                                 h: 2, 
-                                fontSize: selectedTheme.category === 'Modern' ? 48 : 44, 
+                                fontSize: titleFontSize, 
                                 bold: true, 
                                 color: themeColors.primary, 
                                 fontFace: selectedTheme.fontPair.heading, 
-                                align: 'center'
+                                align: 'center',
+                                shadow: selectedTheme.category === 'Modern' ? { 
+                                    type: 'outer', 
+                                    blur: 3, 
+                                    offset: 2, 
+                                    angle: 45, 
+                                    color: '000000', 
+                                    opacity: 0.2 
+                                } : undefined
                             });
+                            
                             if (slideData.data.subtitle) {
                                 slide.addText(slideData.data.subtitle, { 
                                     x: 0.5, 
-                                    y: 4.5, 
+                                    y: selectedTheme.category === 'Modern' ? 5.0 : 4.5, 
                                     w: '90%', 
                                     h: 0.8, 
-                                    fontSize: selectedTheme.category === 'Modern' ? 20 : 18, 
+                                    fontSize: selectedTheme.category === 'Modern' ? 22 : 18, 
                                     color: themeColors.accent, 
                                     fontFace: selectedTheme.fontPair.body, 
                                     align: 'center',
-                                    italic: selectedTheme.category === 'Traditional'
+                                    italic: selectedTheme.category === 'Traditional',
+                                    bold: selectedTheme.category === 'Modern'
                                 });
                             }
+                            
                             if (slideData.data.author) {
                                 slide.addText(`Prepared by: ${slideData.data.author}`, { 
                                     x: 0.5, 
-                                    y: 6.5, 
+                                    y: selectedTheme.category === 'Modern' ? 6.8 : 6.5, 
                                     w: '90%', 
                                     h: 0.5, 
-                                    fontSize: 16, 
+                                    fontSize: selectedTheme.category === 'Modern' ? 18 : 16, 
                                     color: themeColors.text, 
                                     fontFace: selectedTheme.fontPair.body, 
-                                    align: 'center' 
+                                    align: 'center',
+                                    bold: selectedTheme.category === 'Modern'
                                 });
                             }
                             break;
@@ -564,57 +617,96 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                             break;
                             
                         case 'summary':
+                            // Enhanced summary slide with theme-aware styling
                             slide.addText(slideData.title, { 
                                 x: 0.5, 
                                 y: 0.25, 
                                 w: '90%', 
                                 h: 0.8, 
-                                fontSize: 36, 
+                                fontSize: selectedTheme.category === 'Modern' ? 40 : 36, 
                                 bold: true, 
                                 color: themeColors.primary, 
                                 fontFace: selectedTheme.fontPair.heading, 
-                                align: 'center' 
+                                align: 'center',
+                                shadow: selectedTheme.category === 'Modern' ? { 
+                                    type: 'outer', 
+                                    blur: 2, 
+                                    offset: 1, 
+                                    angle: 45, 
+                                    color: '000000', 
+                                    opacity: 0.15 
+                                } : undefined
                             });
+                            
                             slideData.data.kpis?.forEach((kpi: any, index: number) => {
                                 const kpiCount = slideData.data.kpis.length;
                                 const boxWidth = (11.69 - 1 - (0.5 * (kpiCount - 1))) / kpiCount;
                                 const xPos = 0.5 + index * (boxWidth + 0.5);
                                 
-                                // Add KPI background boxes for modern themes
+                                // Add enhanced KPI background styling
                                 if (selectedTheme.category === 'Modern') {
+                                    // Modern: gradient background with subtle shadow
                                     slide.addShape('rect', {
                                         x: xPos - 0.1,
                                         y: 2.8,
                                         w: boxWidth + 0.2,
                                         h: 2.5,
-                                        fill: { color: themeColors.accent },
-                                        line: { color: themeColors.secondary, width: 2 }
+                                        fill: themeColors.accent,
+                                        line: { color: themeColors.secondary, width: 2 },
+                                        shadow: { 
+                                            type: 'outer', 
+                                            blur: 4, 
+                                            offset: 2, 
+                                            angle: 45, 
+                                            color: '000000', 
+                                            opacity: 0.2 
+                                        }
+                                    });
+                                } else {
+                                    // Traditional: simple border
+                                    slide.addShape('rect', {
+                                        x: xPos - 0.05,
+                                        y: 2.9,
+                                        w: boxWidth + 0.1,
+                                        h: 2.3,
+                                        fill: 'FFFFFF',
+                                        line: { color: themeColors.primary, width: 2 }
                                     });
                                 }
                                 
                                 slide.addText(String(kpi.value), { 
                                     x: xPos, 
-                                    y: 3.2, 
+                                    y: selectedTheme.category === 'Modern' ? 3.1 : 3.2, 
                                     w: boxWidth, 
                                     h: 1.5, 
-                                    fontSize: selectedTheme.category === 'Modern' ? 52 : 48, 
+                                    fontSize: selectedTheme.category === 'Modern' ? 56 : 48, 
                                     bold: true, 
-                                    color: themeColors.secondary, 
+                                    color: selectedTheme.category === 'Modern' ? themeColors.primary : themeColors.secondary, 
                                     align: 'center', 
                                     valign: 'middle',
-                                    fontFace: selectedTheme.fontPair.heading
+                                    fontFace: selectedTheme.fontPair.heading,
+                                    shadow: selectedTheme.category === 'Modern' ? { 
+                                        type: 'outer', 
+                                        blur: 1, 
+                                        offset: 1, 
+                                        angle: 45, 
+                                        color: '000000', 
+                                        opacity: 0.1 
+                                    } : undefined
                                 });
+                                
                                 slide.addText(kpi.label, { 
                                     x: xPos, 
-                                    y: 4.8, 
+                                    y: selectedTheme.category === 'Modern' ? 4.7 : 4.8, 
                                     w: boxWidth, 
                                     h: 0.6, 
-                                    fontSize: 16, 
+                                    fontSize: selectedTheme.category === 'Modern' ? 18 : 16, 
                                     color: themeColors.text, 
                                     align: 'center', 
                                     valign: 'top',
                                     fontFace: selectedTheme.fontPair.body,
-                                    bold: selectedTheme.category === 'Modern'
+                                    bold: selectedTheme.category === 'Modern',
+                                    italic: selectedTheme.category === 'Traditional'
                                 });
                             });
                             break;
