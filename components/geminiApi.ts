@@ -6,7 +6,7 @@ import { GoogleGenAI, Modality } from '@google/genai';
 let ai: GoogleGenAI | null = null;
 
 try {
-    const apiKey = process.env.API_KEY || import.meta.env.VITE_API_KEY;
+    const apiKey = process.env.API_KEY || (import.meta as any).env?.VITE_API_KEY;
     if (apiKey) {
         ai = new GoogleGenAI({ apiKey });
     } else {

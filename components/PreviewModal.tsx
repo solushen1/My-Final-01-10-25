@@ -5,8 +5,8 @@ import ReactDOM from 'react-dom/client';
 import type { ReportTemplate, Theme, SlideLayout, SlideOverrides, PhotoEnhancementPreset, SlideLayoutType, FormField } from '../types';
 import { FieldType } from '../types';
 import { CloseIcon, ChevronDownIcon, FilePdfIcon, SparklesIcon, GeminiIcon } from './icons';
-import { slidePlan as defaultSlidePlan } from './slidePlan';
 import { editImage, generateContextualImage } from './geminiApi';
+import { getResolvedSlides } from './slidePlanResolver';
 
 // Import Slide Layout Components
 import TitleSlide from './slide_layouts/TitleSlide';
@@ -18,7 +18,6 @@ import ChartSlide from './slide_layouts/ChartSlide';
 
 // Import local libraries
 import PptxGenJS from 'pptxgenjs';
-import { JSONPath } from 'jsonpath-plus';
 
 declare const jspdf: any;
 declare const html2canvas: any;
@@ -156,17 +155,15 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
         }
         
         const checkLibraries = () => {
-            const jsonPathExists = typeof JSONPath !== 'undefined';
             const pptxExists = typeof PptxGenJS !== 'undefined';
             const reactDomExists = typeof ReactDOM !== 'undefined';
             
             console.log('Library check:', {
-                JSONPath: jsonPathExists,
                 PptxGenJS: pptxExists,
                 ReactDOM: reactDomExists
             });
             
-            return jsonPathExists && pptxExists && reactDomExists;
+            return pptxExists && reactDomExists;
         };
         
         // Since we're importing libraries directly, they should be available immediately
@@ -200,114 +197,14 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
     }, [filteredThemes, selectedTheme, setSelectedTheme, themes]);
 
 
-    const getDataByPath = (data: any, path: string) => {
-        if (typeof JSONPath === 'undefined') {
-            console.warn(`JSONPath library not available, using fallback for path: ${path}`);
-            // Simple fallback for basic paths
-            try {
-                if (path.startsWith('$.') && !path.includes('[')) {
-                    const pathParts = path.substring(2).split('.');
-                    let result = data;
-                    for (const part of pathParts) {
-                        if (result && typeof result === 'object' && part in result) {
-                            result = result[part];
-                        } else {
-                            return [];
-                        }
-                    }
-                    return Array.isArray(result) ? result : [result];
-                }
-            } catch (e) {
-                console.error(`Fallback path processing failed: ${path}`, e);
-            }
-            return [];
-        }
-        
-        try {
-            const result = JSONPath({ path: path, json: data });
-            return result && result.length > 0 ? result : [];
-        } catch (e) {
-            console.error(`Error processing JSONPath: ${path}`, e);
-            return [];
-        }
-    };
 
     const slides = useMemo(() => {
-        if (!libsReady) return []; 
-        const plan = defaultSlidePlan[activeTemplate.key] || defaultSlidePlan['default'];
-        if (!plan) return [];
-
-        return plan.map(layout => {
-            const finalLayout = layout.layout;
-            let finalTitle = layout.title.replace('{{title}}', activeTemplate.title);
-            const slideData: any = {};
-
-            layout.content.forEach(item => {
-                let value = getDataByPath(formData, item.path);
-                if (Array.isArray(value) && value.length === 1) value = value[0];
-                
-                switch (finalLayout) {
-                    case 'title':
-                        if (item.styleHint === 'subtitle') slideData.subtitle = value;
-                        if (item.styleHint === 'author') slideData.author = value;
-                        break;
-                    case 'twoColumn':
-                        if (item.type === 'table') {
-                            const tableData = Array.isArray(value) ? value : [];
-                            const fieldKey = item.path.split('.').pop()?.replace(/\[.*?\]/g, '') || '';
-                            const fieldDef = activeTemplate.sections.flatMap(s => s.fields).find(f => f.id === fieldKey);
-                            const headers = fieldDef?.columns || [];
-                            const rows = tableData.map((row: any) => headers.map((header: string) => {
-                                const colKey = Object.keys(row).find(k => (fieldDef?.columns || []).indexOf(header) === Object.keys(row).filter(k => k !== 'tooltips' && k !== 'photos').indexOf(k));
-                                return row[colKey] ?? '';
-                            }));
-                            slideData.table = { headers, rows };
-                        }
-                        break;
-                     case 'imageLeftTextRight':
-                        if (item.type === 'image') slideData.image = Array.isArray(value) ? value[0] : value;
-                        if (item.type === 'list' || item.type === 'text') {
-                             if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'object') {
-                                const fieldKey = item.path.split('.').pop()?.replace(/\[.*?\]/g, '') || '';
-                                const fieldDef = activeTemplate.sections.flatMap(s => s.fields).find(f => f.id === fieldKey);
-                                const headers = fieldDef?.columns || [];
-                                slideData.list = value.map(row => headers.map(h => row[Object.keys(row).filter(k=>!['photos','tooltips'].includes(k))[headers.indexOf(h)]]).join(': '));
-                            } else {
-                                slideData.list = Array.isArray(value) ? value.filter(Boolean) : [value].filter(Boolean);
-                            }
-                        }
-                        break;
-                    case 'summary':
-                        slideData.kpis = slideData.kpis || [];
-                        slideData.kpis.push({ value: Array.isArray(value) ? value[0] : value, label: item.label || '' });
-                        break;
-                    case 'photoGrid':
-                        slideData.images = Array.isArray(value) ? value.flat() : [];
-                        break;
-                    case 'chartFull':
-                        if(layout.suggestedChart){
-                             const chartDataArray = Array.isArray(value) ? value : [];
-                            const fieldKey = layout.suggestedChart.dataPath.split('.').pop()?.replace(/\[.*?\]/g, '') || '';
-                            const fieldDef = activeTemplate.sections.flatMap(s => s.fields).find(f => f.id === fieldKey);
-                            
-                            if (fieldDef && fieldDef.rows && chartDataArray.length > 0) {
-                                const labelKey = Object.keys(fieldDef.rows[0])[0];
-                                const valueKey = Object.keys(fieldDef.rows[0])[1];
-                                slideData.chart = {
-                                    chartType: layout.suggestedChart.chartType,
-                                    data: {
-                                        labels: chartDataArray.map((row: any) => row[labelKey]),
-                                        values: chartDataArray.map((row: any) => parseFloat(row[valueKey]) || 0),
-                                    }
-                                }
-                            }
-                        }
-                        break;
-                }
-            });
-
-            return { id: layout.slideId, title: finalTitle, layout: finalLayout, data: slideData, originalLayout: layout, };
-        });
+        if (!libsReady) return [];
+        
+        // Use the new universal slide resolver
+        const resolvedSlides = getResolvedSlides(activeTemplate, formData);
+        
+        return resolvedSlides;
     }, [activeTemplate, formData, libsReady]);
 
     const processImage = async (base64Image: string): Promise<string> => {
@@ -409,9 +306,6 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
             if (typeof PptxGenJS === 'undefined') {
                 throw new Error('PptxGenJS library not available. Please refresh the page and try again.');
             }
-            if (typeof JSONPath === 'undefined') {
-                throw new Error('JSONPath library not available. Please refresh the page and try again.');
-            }
             
             const pptx = new PptxGenJS();
             
@@ -473,7 +367,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                     y: titleY - 0.3,
                                     w: 9.69,
                                     h: 0.1,
-                                    fill: themeColors.accent,
+                                    fill: { color: themeColors.accent },
                                     line: { width: 0 }
                                 });
                             }
@@ -543,14 +437,13 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                 const tableOptions = {
                                     x: 0.5, 
                                     y: 1.2, 
-                                    w: '90%',
+                                    w: '90%' as any,
                                     border: { pt: 1, color: themeColors.secondary },
                                     color: themeColors.text,
                                     fontFace: selectedTheme.fontPair.body,
                                     fontSize: 12,
                                     autoPage: true,
-                                    rowH: 0.4,
-                                    colW: 'auto'
+                                    rowH: 0.4
                                 };
                                 
                                 // Style header row differently
@@ -651,7 +544,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                         y: 2.8,
                                         w: boxWidth + 0.2,
                                         h: 2.5,
-                                        fill: themeColors.accent,
+                                        fill: { color: themeColors.accent },
                                         line: { color: themeColors.secondary, width: 2 },
                                         shadow: { 
                                             type: 'outer', 
@@ -669,7 +562,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                         y: 2.9,
                                         w: boxWidth + 0.1,
                                         h: 2.3,
-                                        fill: 'FFFFFF',
+                                        fill: { color: 'FFFFFF' },
                                         line: { color: themeColors.primary, width: 2 }
                                     });
                                 }
