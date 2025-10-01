@@ -29,6 +29,27 @@ export class SlidePlanResolver {
     }
 
     /**
+     * Normalize numeric values by removing currency symbols and commas
+     * Handles accounting parentheses as negatives: "(500)" becomes -500
+     */
+    private normalizeNumber(value: any): number {
+        if (value == null) return NaN;
+        
+        const str = String(value).trim();
+        
+        // Check if wrapped in parentheses (accounting notation for negative)
+        const isNegative = /^\(.*\)$/.test(str);
+        
+        // Remove currency symbols, commas, spaces, and parentheses
+        const cleaned = str.replace(/[$,\s]/g, '').replace(/[()]/g, '');
+        
+        const num = parseFloat(cleaned);
+        
+        // Apply negative sign if parentheses were present
+        return isNegative ? -Math.abs(num) : num;
+    }
+
+    /**
      * Generate all slides for the template
      */
     resolve(): ResolvedSlide[] {
@@ -98,13 +119,28 @@ export class SlidePlanResolver {
             if (!tableData || !Array.isArray(tableData) || tableData.length === 0) return;
             
             const headers = field.columns || [];
+            
+            // Build stable column key mapping: Try exact match, then case-insensitive, then fallback to index
+            const getColumnValue = (row: any, header: string, headerIndex: number): string => {
+                // Try exact match
+                if (row.hasOwnProperty(header)) return String(row[header] ?? '');
+                
+                // Try case-insensitive match
+                const lowerHeader = header.toLowerCase();
+                const matchingKey = Object.keys(row).find(k => k.toLowerCase() === lowerHeader);
+                if (matchingKey) return String(row[matchingKey] ?? '');
+                
+                // Fallback: use index position (excluding special keys)
+                const dataKeys = Object.keys(row).filter(k => k !== 'tooltips' && k !== 'photos');
+                if (headerIndex < dataKeys.length) {
+                    return String(row[dataKeys[headerIndex]] ?? '');
+                }
+                
+                return '';
+            };
+            
             const rows = tableData.map((row: any) => 
-                headers.map((header: string) => {
-                    const colKey = Object.keys(row).find(k => 
-                        (field.columns || []).indexOf(header) === Object.keys(row).filter(k => k !== 'tooltips' && k !== 'photos').indexOf(k)
-                    );
-                    return row[colKey] ?? '';
-                })
+                headers.map((header: string, idx: number) => getColumnValue(row, header, idx))
             );
             
             // Create table slide
@@ -124,18 +160,25 @@ export class SlidePlanResolver {
             const chartSlide = this.createChartFromTable(field, tableData, section, fieldIndex);
             if (chartSlide) slides.push(chartSlide);
             
-            // Check for photos in table rows
+            // Check for photos in table rows - paginate if more than 4
             const tablePhotos = tableData.flatMap((row: any) => row.photos || []).filter(Boolean);
             if (tablePhotos.length > 0) {
-                slides.push({
-                    id: `${section.id}-table-photos-${fieldIndex}`,
-                    title: `${field.label || section.title} - Photos`,
-                    layout: 'photoGrid',
-                    data: {
-                        images: tablePhotos.slice(0, 4)
-                    },
-                    originalLayout: {}
-                });
+                // Create multiple slides for photos (4 per slide)
+                for (let i = 0; i < tablePhotos.length; i += 4) {
+                    const pagePhotos = tablePhotos.slice(i, i + 4);
+                    const pageNum = Math.floor(i / 4) + 1;
+                    const totalPages = Math.ceil(tablePhotos.length / 4);
+                    
+                    slides.push({
+                        id: `${section.id}-table-photos-${fieldIndex}-page${pageNum}`,
+                        title: `${field.label || section.title} - Photos${totalPages > 1 ? ` (${pageNum}/${totalPages})` : ''}`,
+                        layout: 'photoGrid',
+                        data: {
+                            images: pagePhotos
+                        },
+                        originalLayout: {}
+                    });
+                }
             }
         });
         
@@ -158,20 +201,27 @@ export class SlidePlanResolver {
             });
         });
         
-        // Create slides from photo fields
+        // Create slides from photo fields - paginate if more than 4
         photos.forEach((field, fieldIndex) => {
             const photoData = sectionData[field.id];
             if (!photoData || !Array.isArray(photoData) || photoData.length === 0) return;
             
-            slides.push({
-                id: `${section.id}-photos-${fieldIndex}`,
-                title: field.label || section.title,
-                layout: 'photoGrid',
-                data: {
-                    images: photoData.slice(0, 4)
-                },
-                originalLayout: {}
-            });
+            // Create multiple slides for photos (4 per slide)
+            for (let i = 0; i < photoData.length; i += 4) {
+                const pagePhotos = photoData.slice(i, i + 4);
+                const pageNum = Math.floor(i / 4) + 1;
+                const totalPages = Math.ceil(photoData.length / 4);
+                
+                slides.push({
+                    id: `${section.id}-photos-${fieldIndex}-page${pageNum}`,
+                    title: `${field.label || section.title}${totalPages > 1 ? ` (${pageNum}/${totalPages})` : ''}`,
+                    layout: 'photoGrid',
+                    data: {
+                        images: pagePhotos
+                    },
+                    originalLayout: {}
+                });
+            }
         });
         
         // Create text summary slide if we have text fields
@@ -207,28 +257,53 @@ export class SlidePlanResolver {
         if (!field.columns || field.columns.length < 2) return null;
         
         const headers = field.columns;
-        const labelCol = headers[0];
-        const valueCol = headers[1];
         
-        // Check if second column has numeric data
-        const hasNumericData = tableData.some(row => {
-            const value = row[Object.keys(row).filter(k => k !== 'tooltips' && k !== 'photos')[1]];
-            return !isNaN(parseFloat(value));
+        // Helper to get column value by header (stable)
+        const getColumnValue = (row: any, header: string, headerIndex: number): any => {
+            if (row.hasOwnProperty(header)) return row[header];
+            const lowerHeader = header.toLowerCase();
+            const matchingKey = Object.keys(row).find(k => k.toLowerCase() === lowerHeader);
+            if (matchingKey) return row[matchingKey];
+            const dataKeys = Object.keys(row).filter(k => k !== 'tooltips' && k !== 'photos');
+            return headerIndex < dataKeys.length ? row[dataKeys[headerIndex]] : null;
+        };
+        
+        // Find first numeric column for charting
+        let labelColIndex = 0;
+        let valueColIndex = -1;
+        
+        for (let i = 1; i < headers.length; i++) {
+            const hasNumeric = tableData.some(row => {
+                const val = getColumnValue(row, headers[i], i);
+                return val != null && !isNaN(this.normalizeNumber(val));
+            });
+            
+            if (hasNumeric) {
+                valueColIndex = i;
+                break;
+            }
+        }
+        
+        if (valueColIndex === -1) return null;
+        
+        // Extract chart data using stable column access with normalized numbers
+        const chartData = tableData.map(row => ({
+            label: String(getColumnValue(row, headers[labelColIndex], labelColIndex) ?? ''),
+            value: this.normalizeNumber(getColumnValue(row, headers[valueColIndex], valueColIndex))
+        })).filter(item => {
+            // Filter out summary rows, empty labels, and NaN values
+            const label = item.label.toLowerCase();
+            return item.label && 
+                   !isNaN(item.value) &&
+                   label !== 'total' && 
+                   label !== 'net surplus / (deficit)' &&
+                   label !== 'grand total';
         });
         
-        if (!hasNumericData) return null;
+        if (chartData.length === 0 || chartData.every(item => item.value === 0)) return null;
         
-        // Extract chart data
-        const labels = tableData.map(row => 
-            row[Object.keys(row).filter(k => k !== 'tooltips' && k !== 'photos')[0]] || ''
-        ).filter(label => label !== 'Total' && label !== 'Net Surplus / (Deficit)' && label);
-        
-        const values = tableData.map(row => {
-            const val = row[Object.keys(row).filter(k => k !== 'tooltips' && k !== 'photos')[1]];
-            return parseFloat(val) || 0;
-        }).slice(0, labels.length);
-        
-        if (labels.length === 0 || values.every(v => v === 0)) return null;
+        const labels = chartData.map(item => item.label);
+        const values = chartData.map(item => item.value);
         
         // Determine chart type
         const chartType = values.length > 5 ? 'bar' : 'pie';
@@ -263,25 +338,40 @@ export class SlidePlanResolver {
             const sectionData = this.formData[section.id] || {};
             
             section.fields.forEach(field => {
-                if (field.type === FieldType.TABLE) {
+                if (field.type === FieldType.TABLE && field.columns) {
                     const tableData = sectionData[field.id];
-                    if (!Array.isArray(tableData)) return;
+                    if (!Array.isArray(tableData) || !field.columns) return;
                     
-                    // Look for total rows or summary rows
+                    const headers = field.columns;
+                    
+                    // Helper to get column value by header (stable)
+                    const getColumnValue = (row: any, header: string, headerIndex: number): any => {
+                        if (row.hasOwnProperty(header)) return row[header];
+                        const lowerHeader = header.toLowerCase();
+                        const matchingKey = Object.keys(row).find(k => k.toLowerCase() === lowerHeader);
+                        if (matchingKey) return row[matchingKey];
+                        const dataKeys = Object.keys(row).filter(k => k !== 'tooltips' && k !== 'photos');
+                        return headerIndex < dataKeys.length ? row[dataKeys[headerIndex]] : null;
+                    };
+                    
+                    // Look for total rows using stable column access
                     const totalRow = tableData.find(row => {
-                        const firstValue = Object.values(row)[0];
-                        return String(firstValue).toLowerCase().includes('total');
+                        const labelValue = String(getColumnValue(row, headers[0], 0) ?? '').toLowerCase();
+                        return labelValue.includes('total') || labelValue.includes('surplus') || labelValue.includes('deficit');
                     });
                     
                     if (totalRow) {
-                        const keys = Object.keys(totalRow).filter(k => k !== 'tooltips' && k !== 'photos');
-                        if (keys.length >= 2) {
-                            const value = totalRow[keys[1]];
-                            if (value && !isNaN(parseFloat(value))) {
+                        // Find first numeric column
+                        for (let i = 1; i < headers.length; i++) {
+                            const value = getColumnValue(totalRow, headers[i], i);
+                            const numValue = this.normalizeNumber(value);
+                            
+                            if (!isNaN(numValue)) {
                                 kpis.push({
-                                    value: parseFloat(value),
-                                    label: field.label || keys[1]
+                                    value: numValue,
+                                    label: field.label || headers[i]
                                 });
+                                break; // Only take first numeric value per table
                             }
                         }
                     }
@@ -306,46 +396,8 @@ export class SlidePlanResolver {
     }
 
     private createPhotoGridSlide(): ResolvedSlide | null {
-        const allPhotos: string[] = [];
-        
-        // Collect all photos from all sections
-        this.template.sections.forEach(section => {
-            const sectionData = this.formData[section.id] || {};
-            
-            section.fields.forEach(field => {
-                if (field.type === FieldType.PHOTOS) {
-                    const photos = sectionData[field.id];
-                    if (Array.isArray(photos)) {
-                        allPhotos.push(...photos);
-                    }
-                }
-                
-                if (field.type === FieldType.TABLE && field.hasPhotoUploads) {
-                    const tableData = sectionData[field.id];
-                    if (Array.isArray(tableData)) {
-                        tableData.forEach(row => {
-                            if (row.photos && Array.isArray(row.photos)) {
-                                allPhotos.push(...row.photos);
-                            }
-                        });
-                    }
-                }
-            });
-        });
-        
-        // Only create if we have photos
-        if (allPhotos.length > 0) {
-            return {
-                id: `photos-${this.template.key}`,
-                title: 'Quarter in Pictures',
-                layout: 'photoGrid',
-                data: {
-                    images: allPhotos.slice(0, 4)
-                },
-                originalLayout: {}
-            };
-        }
-        
+        // This method is no longer needed as photos are paginated per section
+        // Keeping it as null to avoid creating duplicate summary photo slides
         return null;
     }
 
