@@ -1,3 +1,5 @@
+
+
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import ReactDOM from 'react-dom/client';
 import type { ReportTemplate, Theme, SlideLayout, SlideOverrides, PhotoEnhancementPreset, SlideLayoutType, FormField } from '../types';
@@ -143,7 +145,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
         }
     };
 
-
+    
 
     // Check if local libraries are available
     useEffect(() => {
@@ -151,19 +153,19 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
             setLibsReady(false); // Reset when modal closes
             return;
         }
-
+        
         const checkLibraries = () => {
             const pptxExists = typeof PptxGenJS !== 'undefined';
             const reactDomExists = typeof ReactDOM !== 'undefined';
-
+            
             console.log('Library check:', {
                 PptxGenJS: pptxExists,
                 ReactDOM: reactDomExists
             });
-
+            
             return pptxExists && reactDomExists;
         };
-
+        
         // Since we're importing libraries directly, they should be available immediately
         if (checkLibraries()) {
             setLibsReady(true);
@@ -198,10 +200,10 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
 
     const slides = useMemo(() => {
         if (!libsReady) return [];
-
+        
         // Use the new universal slide resolver
         const resolvedSlides = getResolvedSlides(activeTemplate, formData);
-
+        
         return resolvedSlides;
     }, [activeTemplate, formData, libsReady]);
 
@@ -209,7 +211,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
         if (!useAiFeatures || photoOption === 'original' || !base64Image) {
             return Promise.resolve(base64Image);
         }
-
+        
         try {
             let prompt = '';
             if (photoOption === 'enhance') {
@@ -217,7 +219,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
             } else if (photoOption === 'removeBg') {
                 prompt = 'Remove the background from this photo, leaving only the main subject with a transparent background.';
             }
-
+            
             if (prompt) {
                 return await editImage(base64Image, prompt);
             }
@@ -263,7 +265,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
     const generatePptx = async () => {
         setIsLoading(true);
         setLoadingMessage('Preparing Presentation...');
-
+        
         const generatedIcons: { [slideId: string]: string } = {};
 
         // Only generate AI assets if AI features are enabled
@@ -283,7 +285,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                             // Continue without icon for this slide
                         }
                     });
-
+                
                 await Promise.all(iconGenerationPromises);
             } catch (error) {
                 console.error('Error during AI asset generation:', error);
@@ -304,9 +306,9 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
             if (typeof PptxGenJS === 'undefined') {
                 throw new Error('PptxGenJS library not available. Please refresh the page and try again.');
             }
-
+            
             const pptx = new PptxGenJS();
-
+            
             // Apply theme colors properly - ensure all colors are valid strings for PptxGenJS
             const themeColors = { 
                 background: sanitizeColor(selectedTheme.palette.background, 'FFFFFF'), 
@@ -315,7 +317,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                 secondary: sanitizeColor(selectedTheme.palette.secondary, '808080'),
                 accent: sanitizeColor(selectedTheme.palette.accent, 'FF6600')
             };
-
+            
             pptx.defineLayout({ name: 'A4_LANDSCAPE', width: 11.69, height: 8.27 });
             pptx.layout = 'A4_LANDSCAPE';
 
@@ -325,199 +327,379 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
             pptx.subject = `${activeTemplate.title} - ${selectedTheme.name} Theme`;
             pptx.title = activeTemplate.title;
 
-            // Generate contextual images for slides that need them
-            if (useAiFeatures) {
-                let quotaExceeded = false;
-                const imagePromises = slides.map(async (slide, index) => {
-                    if (slide.layout === 'imageLeftTextRight' && slide.content && !quotaExceeded) {
+            for (let i = 0; i < slides.length; i++) {
+                const slideData = slides[i];
+                setLoadingMessage(`Creating slide ${i + 1} of ${slides.length}...`);
+                
+                try {
+                    const slide = pptx.addSlide(); 
+                    
+                    // Apply simple background color (avoid gradients for compatibility)
+                    slide.background = { color: themeColors.background };
+
+                    // Add generated icon if available and AI features enabled
+                    if (useAiFeatures && generatedIcons[slideData.id]) {
                         try {
-                            console.log(`[GEMINI API CALL] Generating image with prompt: "${slide.content.imagePrompt}"`);
-                            const imageUrl = await generateContextualImage(slide.content.imagePrompt, selectedTheme);
-                            return { index, imageUrl };
-                        } catch (error: any) {
-                            console.error('Error generating contextual image with Gemini:', error);
-                            // Check if it's a quota exceeded error
-                            if (error?.status === 429 || error?.message?.includes('quota') || error?.message?.includes('RESOURCE_EXHAUSTED')) {
-                                quotaExceeded = true;
-                                console.warn('Gemini API quota exceeded. Continuing without AI-generated images.');
-                            }
-                            return { index, imageUrl: null };
+                            slide.addImage({ 
+                                data: generatedIcons[slideData.id], 
+                                x: selectedTheme.category === 'Modern' ? 10.5 : 10.8, 
+                                y: selectedTheme.category === 'Modern' ? 0.1 : 0.2, 
+                                w: selectedTheme.category === 'Modern' ? 0.8 : 0.6, 
+                                h: selectedTheme.category === 'Modern' ? 0.8 : 0.6,
+                                transparency: selectedTheme.category === 'Modern' ? 15 : 10,
+                                rounding: selectedTheme.category === 'Modern'
+                            });
+                        } catch (error) {
+                            console.error(`Error adding icon to slide ${slideData.id}:`, error);
                         }
                     }
-                    return { index, imageUrl: null };
-                });
 
-                const imageResults = await Promise.all(imagePromises);
-                imageResults.forEach(({ index, imageUrl }) => {
-                    if (imageUrl && slides[index].content) {
-                        slides[index].content.imageUrl = imageUrl;
+                    switch (slideData.layout) {
+                        case 'title':
+                            // Apply theme-specific title styling with enhanced visual design
+                            const titleY = selectedTheme.category === 'Modern' ? 2.8 : 2.5;
+                            const titleFontSize = selectedTheme.category === 'Modern' ? 52 : 44;
+                            
+                            // Add background decoration for Modern themes
+                            if (selectedTheme.category === 'Modern') {
+                                slide.addShape('rect', {
+                                    x: 1,
+                                    y: titleY - 0.3,
+                                    w: 9.69,
+                                    h: 0.1,
+                                    fill: { color: themeColors.accent },
+                                    line: { width: 0 }
+                                });
+                            }
+                            
+                            slide.addText(slideData.title, { 
+                                x: 0.5, 
+                                y: titleY, 
+                                w: '90%', 
+                                h: 2, 
+                                fontSize: titleFontSize, 
+                                bold: true, 
+                                color: themeColors.primary, 
+                                fontFace: selectedTheme.fontPair.heading, 
+                                align: 'center',
+                                shadow: selectedTheme.category === 'Modern' ? { 
+                                    type: 'outer', 
+                                    blur: 3, 
+                                    offset: 2, 
+                                    angle: 45, 
+                                    color: '000000', 
+                                    opacity: 0.2 
+                                } : undefined
+                            });
+                            
+                            if (slideData.data.subtitle) {
+                                slide.addText(slideData.data.subtitle, { 
+                                    x: 0.5, 
+                                    y: selectedTheme.category === 'Modern' ? 5.0 : 4.5, 
+                                    w: '90%', 
+                                    h: 0.8, 
+                                    fontSize: selectedTheme.category === 'Modern' ? 22 : 18, 
+                                    color: themeColors.accent, 
+                                    fontFace: selectedTheme.fontPair.body, 
+                                    align: 'center',
+                                    italic: selectedTheme.category === 'Traditional',
+                                    bold: selectedTheme.category === 'Modern'
+                                });
+                            }
+                            
+                            if (slideData.data.author) {
+                                slide.addText(`Prepared by: ${slideData.data.author}`, { 
+                                    x: 0.5, 
+                                    y: selectedTheme.category === 'Modern' ? 6.8 : 6.5, 
+                                    w: '90%', 
+                                    h: 0.5, 
+                                    fontSize: selectedTheme.category === 'Modern' ? 18 : 16, 
+                                    color: themeColors.text, 
+                                    fontFace: selectedTheme.fontPair.body, 
+                                    align: 'center',
+                                    bold: selectedTheme.category === 'Modern'
+                                });
+                            }
+                            break;
+                            
+                        case 'twoColumn':
+                            slide.addText(slideData.title, { 
+                                x: 0.5, 
+                                y: 0.25, 
+                                w: '90%', 
+                                h: 0.6, 
+                                fontSize: 32, 
+                                bold: true, 
+                                color: themeColors.primary, 
+                                fontFace: selectedTheme.fontPair.heading 
+                            });
+                            if (slideData.data.table && slideData.data.table.rows && slideData.data.table.rows.length > 0) {
+                                const tableOptions = {
+                                    x: 0.5, 
+                                    y: 1.2, 
+                                    w: '90%' as any,
+                                    border: { pt: 1, color: themeColors.secondary },
+                                    color: themeColors.text,
+                                    fontFace: selectedTheme.fontPair.body,
+                                    fontSize: 12,
+                                    autoPage: true,
+                                    rowH: 0.4
+                                };
+                                
+                                // Style header row differently
+                                const tableData = [
+                                    slideData.data.table.headers.map((header: string) => ({
+                                        text: header,
+                                        options: { 
+                                            bold: true, 
+                                            color: themeColors.primary,
+                                            fontFace: selectedTheme.fontPair.heading
+                                        }
+                                    })),
+                                    ...slideData.data.table.rows.map((row: string[], index: number) => 
+                                        row.map((cell: string) => ({
+                                            text: cell,
+                                            options: {}
+                                        }))
+                                    )
+                                ];
+                                
+                                slide.addTable(tableData, tableOptions);
+                            }
+                            break;
+                            
+                        case 'imageLeftTextRight':
+                            slide.addText(slideData.title, { 
+                                x: 0.5, 
+                                y: 0.25, 
+                                w: '90%', 
+                                h: 0.6, 
+                                fontSize: 32, 
+                                bold: true, 
+                                color: themeColors.primary, 
+                                fontFace: selectedTheme.fontPair.heading 
+                            });
+                            if (slideData.data.image) {
+                                try {
+                                    const processedImage = await processImage(slideData.data.image);
+                                    slide.addImage({ 
+                                        data: processedImage, 
+                                        x: 0.5, 
+                                        y: 1.2, 
+                                        w: 5.5, 
+                                        h: 5.8,
+                                        rounding: selectedTheme.category === 'Modern'
+                                    });
+                                } catch (error) {
+                                    console.error('Error processing/adding image:', error);
+                                }
+                            }
+                            if (slideData.data.list && slideData.data.list.length > 0) {
+                                slide.addText(slideData.data.list, { 
+                                    x: 6.2, 
+                                    y: 1.2, 
+                                    w: 5, 
+                                    h: 5.8, 
+                                    color: themeColors.text, 
+                                    fontFace: selectedTheme.fontPair.body, 
+                                    bullet: true, 
+                                    fontSize: 14,
+                                    lineSpacing: selectedTheme.category === 'Modern' ? 20 : 16
+                                });
+                            }
+                            break;
+                            
+                        case 'summary':
+                            // Enhanced summary slide with theme-aware styling
+                            slide.addText(slideData.title, { 
+                                x: 0.5, 
+                                y: 0.25, 
+                                w: '90%', 
+                                h: 0.8, 
+                                fontSize: selectedTheme.category === 'Modern' ? 40 : 36, 
+                                bold: true, 
+                                color: themeColors.primary, 
+                                fontFace: selectedTheme.fontPair.heading, 
+                                align: 'center',
+                                shadow: selectedTheme.category === 'Modern' ? { 
+                                    type: 'outer', 
+                                    blur: 2, 
+                                    offset: 1, 
+                                    angle: 45, 
+                                    color: '000000', 
+                                    opacity: 0.15 
+                                } : undefined
+                            });
+                            
+                            slideData.data.kpis?.forEach((kpi: any, index: number) => {
+                                const kpiCount = slideData.data.kpis.length;
+                                const boxWidth = (11.69 - 1 - (0.5 * (kpiCount - 1))) / kpiCount;
+                                const xPos = 0.5 + index * (boxWidth + 0.5);
+                                
+                                // Add enhanced KPI background styling
+                                if (selectedTheme.category === 'Modern') {
+                                    // Modern: gradient background with subtle shadow
+                                    slide.addShape('rect', {
+                                        x: xPos - 0.1,
+                                        y: 2.8,
+                                        w: boxWidth + 0.2,
+                                        h: 2.5,
+                                        fill: { color: themeColors.accent },
+                                        line: { color: themeColors.secondary, width: 2 },
+                                        shadow: { 
+                                            type: 'outer', 
+                                            blur: 4, 
+                                            offset: 2, 
+                                            angle: 45, 
+                                            color: '000000', 
+                                            opacity: 0.2 
+                                        }
+                                    });
+                                } else {
+                                    // Traditional: simple border
+                                    slide.addShape('rect', {
+                                        x: xPos - 0.05,
+                                        y: 2.9,
+                                        w: boxWidth + 0.1,
+                                        h: 2.3,
+                                        fill: { color: 'FFFFFF' },
+                                        line: { color: themeColors.primary, width: 2 }
+                                    });
+                                }
+                                
+                                slide.addText(String(kpi.value), { 
+                                    x: xPos, 
+                                    y: selectedTheme.category === 'Modern' ? 3.1 : 3.2, 
+                                    w: boxWidth, 
+                                    h: 1.5, 
+                                    fontSize: selectedTheme.category === 'Modern' ? 56 : 48, 
+                                    bold: true, 
+                                    color: selectedTheme.category === 'Modern' ? themeColors.primary : themeColors.secondary, 
+                                    align: 'center', 
+                                    valign: 'middle',
+                                    fontFace: selectedTheme.fontPair.heading,
+                                    shadow: selectedTheme.category === 'Modern' ? { 
+                                        type: 'outer', 
+                                        blur: 1, 
+                                        offset: 1, 
+                                        angle: 45, 
+                                        color: '000000', 
+                                        opacity: 0.1 
+                                    } : undefined
+                                });
+                                
+                                slide.addText(kpi.label, { 
+                                    x: xPos, 
+                                    y: selectedTheme.category === 'Modern' ? 4.7 : 4.8, 
+                                    w: boxWidth, 
+                                    h: 0.6, 
+                                    fontSize: selectedTheme.category === 'Modern' ? 18 : 16, 
+                                    color: themeColors.text, 
+                                    align: 'center', 
+                                    valign: 'top',
+                                    fontFace: selectedTheme.fontPair.body,
+                                    bold: selectedTheme.category === 'Modern',
+                                    italic: selectedTheme.category === 'Traditional'
+                                });
+                            });
+                            break;
+                            
+                        case 'photoGrid':
+                            slide.addText(slideData.title, { 
+                                x: 0.5, 
+                                y: 0.25, 
+                                w: '90%', 
+                                h: 0.6, 
+                                fontSize: 32, 
+                                bold: true, 
+                                color: themeColors.primary, 
+                                fontFace: selectedTheme.fontPair.heading 
+                            });
+                            if (slideData.data.images) {
+                                const gridPositions = [
+                                    { x: 0.5, y: 1.2, w: 5.5, h: 3 }, 
+                                    { x: 6.19, y: 1.2, w: 5, h: 3 }, 
+                                    { x: 0.5, y: 4.5, w: 5.5, h: 3 }, 
+                                    { x: 6.19, y: 4.5, w: 5, h: 3 }
+                                ];
+                                for(let imgIndex = 0; imgIndex < Math.min(slideData.data.images.length, 4); imgIndex++) {
+                                    try {
+                                        const processedImage = await processImage(slideData.data.images[imgIndex]);
+                                        slide.addImage({ 
+                                            data: processedImage, 
+                                            ...gridPositions[imgIndex],
+                                            rounding: selectedTheme.category === 'Modern'
+                                        });
+                                    } catch (error) {
+                                        console.error(`Error processing image ${imgIndex}:`, error);
+                                    }
+                                }
+                            }
+                            break;
+                            
+                        case 'chartFull':
+                            slide.addText(slideData.title, { 
+                                x: 0.5, 
+                                y: 0.25, 
+                                w: '90%', 
+                                h: 0.6, 
+                                fontSize: 32, 
+                                bold: true, 
+                                color: themeColors.primary, 
+                                fontFace: selectedTheme.fontPair.heading 
+                            });
+                            
+                            try {
+                                const chartDiv = document.createElement('div');
+                                chartDiv.style.width = '1000px';
+                                chartDiv.style.height = '600px';
+                                chartDiv.style.backgroundColor = selectedTheme.palette.background;
+                                chartContainer.appendChild(chartDiv);
+                                
+                                const chartRoot = ReactDOM.createRoot(chartDiv);
+                                await new Promise<void>(resolve => {
+                                    chartRoot.render(<ChartSlide slide={slideData} theme={selectedTheme} />);
+                                    setTimeout(resolve, 1000); // Give more time for chart rendering
+                                });
+
+                                const canvas = chartDiv.querySelector('canvas');
+                                if (canvas) {
+                                    const chartImage = canvas.toDataURL('image/png');
+                                    slide.addImage({ 
+                                        data: chartImage, 
+                                        x: 1, 
+                                        y: 1.2, 
+                                        w: 9.69, 
+                                        h: 5.8,
+                                        
+                                    });
+                                }
+                                chartRoot.unmount();
+                                chartContainer.removeChild(chartDiv);
+                            } catch (error) {
+                                console.error('Error creating chart:', error);
+                            }
+                            break;
                     }
-                });
-
-                if (quotaExceeded) {
-                    setGenerationStatus('⚠️ Gemini API quota exceeded. Presentation generated without AI images. You can try again later or disable AI features.');
+                    
+                    // Add slide number in theme colors
+                    slide.addText(`${i + 1}`, {
+                        x: 11,
+                        y: 7.5,
+                        w: 0.5,
+                        h: 0.3,
+                        fontSize: 12,
+                        color: themeColors.secondary,
+                        align: 'center',
+                        fontFace: selectedTheme.fontPair.body
+                    });
+                    
+                } catch (error) {
+                    console.error(`Error creating slide ${i + 1}:`, error);
+                    // Continue with next slide
                 }
             }
-
-            slides.forEach((slide, index) => {
-                try {
-                    if (slide.layout === 'title') {
-                        pres.addSlide({ masterName: 'TITLE_SLIDE' }).addText(slide.content.title, {
-                            x: 1, y: 3, w: 8, h: 1.5, fontSize: 32, bold: true, color: selectedTheme.palette.primary, align: 'center'
-                        }).addText(slide.content.subtitle || '', {
-                            x: 1, y: 4.5, w: 8, h: 1, fontSize: 18, color: selectedTheme.palette.secondary, align: 'center'
-                        });
-                    } else if (slide.layout === 'imageLeftTextRight') {
-                        const textSlide = pres.addSlide();
-                        textSlide.addText(slide.content.title, {
-                            x: 0.5, y: 0.5, w: 9, h: 0.8, fontSize: 24, bold: true, color: selectedTheme.palette.primary
-                        });
-
-                        if (slide.content.imageUrl) {
-                            try {
-                                textSlide.addImage({
-                                    data: slide.content.imageUrl,
-                                    x: 0.5, y: 1.5, w: 4, h: 3
-                                });
-                            } catch (imgError) {
-                                console.warn('Failed to add AI-generated image to slide, continuing without it');
-                            }
-                        }
-
-                        if (slide.content.text && typeof slide.content.text === 'string') {
-                            textSlide.addText(slide.content.text, {
-                                x: slide.content.imageUrl ? 5 : 0.5,
-                                y: 1.5,
-                                w: slide.content.imageUrl ? 4.5 : 9,
-                                h: 3,
-                                fontSize: 14,
-                                color: selectedTheme.palette.foreground,
-                                valign: 'top'
-                            });
-                        }
-                    } else if (slide.layout === 'twoColumn') {
-                        const twoColSlide = pres.addSlide();
-                        twoColSlide.addText(slide.content.title, {
-                            x: 0.5, y: 0.5, w: 9, h: 0.8, fontSize: 24, bold: true, color: selectedTheme.palette.primary
-                        });
-
-                        if (slide.content.table && slide.content.table.rows && slide.content.table.rows.length > 0) {
-                            const tableData = [
-                                slide.content.table.headers.map((header: string) => ({ text: header, options: { bold: true, color: themeColors.primary } })),
-                                ...slide.content.table.rows.map((row: string[]) => row.map(cell => ({ text: cell })))
-                            ];
-
-                            twoColSlide.addTable(tableData, {
-                                x: 0.5, y: 1.5, w: 9, h: 4,
-                                fontSize: 12,
-                                fontFace: selectedTheme.fontPair.body,
-                                color: themeColors.text,
-                                border: { pt: 1, color: themeColors.secondary },
-                                autoPage: true,
-                                rowH: 0.3
-                            });
-                        }
-                    } else if (slide.layout === 'summary') {
-                        const summarySlide = pres.addSlide();
-                        summarySlide.addText(slide.content.title, {
-                            x: 0.5, y: 0.5, w: 9, h: 0.8, fontSize: 24, bold: true, color: themeColors.primary, align: 'center', fontFace: selectedTheme.fontPair.heading
-                        });
-
-                        slide.content.kpis?.forEach((kpi: any, kpiIndex: number) => {
-                            const kpiCount = slide.content.kpis.length;
-                            const boxWidth = (9.69 - (0.5 * (kpiCount - 1))) / kpiCount;
-                            const xPos = 0.5 + kpiIndex * (boxWidth + 0.5);
-
-                            summarySlide.addShape('rect', {
-                                x: xPos, y: 1.8, w: boxWidth, h: 2.5,
-                                fill: { color: themeColors.accent },
-                                line: { color: themeColors.secondary, width: 1 }
-                            });
-
-                            summarySlide.addText(String(kpi.value), {
-                                x: xPos, y: 2.1, w: boxWidth, h: 1.2,
-                                fontSize: 48, bold: true, color: themeColors.background,
-                                align: 'center', valign: 'middle', fontFace: selectedTheme.fontPair.heading
-                            });
-
-                            summarySlide.addText(kpi.label, {
-                                x: xPos, y: 3.8, w: boxWidth, h: 0.5,
-                                fontSize: 14, color: themeColors.text, align: 'center', fontFace: selectedTheme.fontPair.body
-                            });
-                        });
-                    } else if (slide.layout === 'photoGrid') {
-                        const photoGridSlide = pres.addSlide();
-                        photoGridSlide.addText(slide.content.title, {
-                            x: 0.5, y: 0.5, w: 9, h: 0.8, fontSize: 24, bold: true, color: themeColors.primary, fontFace: selectedTheme.fontPair.heading
-                        });
-
-                        const gridPositions = [
-                            { x: 0.5, y: 1.5, w: 4.2, h: 3 },
-                            { x: 5.1, y: 1.5, w: 4.2, h: 3 },
-                            { x: 0.5, y: 5, w: 4.2, h: 3 },
-                            { x: 5.1, y: 5, w: 4.2, h: 3 }
-                        ];
-
-                        slide.content.images?.slice(0, 4).forEach((imgData: string, imgIndex: number) => {
-                            try {
-                                photoGridSlide.addImage({
-                                    data: imgData,
-                                    ...gridPositions[imgIndex]
-                                });
-                            } catch (imgError) {
-                                console.warn(`Failed to add image ${imgIndex} to photo grid slide, continuing without it`);
-                            }
-                        });
-                    } else if (slide.layout === 'chartFull') {
-                        const chartSlide = pres.addSlide();
-                        chartSlide.addText(slide.content.title, {
-                            x: 0.5, y: 0.5, w: 9, h: 0.8, fontSize: 24, bold: true, color: themeColors.primary, fontFace: selectedTheme.fontPair.heading
-                        });
-
-                        // Render chart into a temporary div to capture as image
-                        const chartDiv = document.createElement('div');
-                        chartDiv.style.width = '900px'; // Larger size for better canvas resolution
-                        chartDiv.style.height = '500px';
-                        chartDiv.style.position = 'absolute';
-                        chartDiv.style.left = '-9999px';
-                        document.body.appendChild(chartDiv);
-
-                        const chartRoot = ReactDOM.createRoot(chartDiv);
-                        chartRoot.render(<ChartSlide slide={slide} theme={selectedTheme} />);
-
-                        setTimeout(() => {
-                            const canvas = chartDiv.querySelector('canvas');
-                            if (canvas) {
-                                const chartImageData = canvas.toDataURL('image/png');
-                                chartSlide.addImage({
-                                    data: chartImageData,
-                                    x: 0.5, y: 1.5, w: 9, h: 5
-                                });
-                            } else {
-                                console.warn('Chart canvas not found, cannot add chart image to slide.');
-                            }
-                            chartRoot.unmount();
-                            document.body.removeChild(chartDiv);
-                        }, 1500); // Increased delay to ensure chart rendering
-                    }
-
-                } catch (error) {
-                    console.error(`Error creating slide ${index + 1}:`, error);
-                    // Add a fallback slide with basic text if slide creation fails
-                    try {
-                        const fallbackSlide = pres.addSlide();
-                        fallbackSlide.addText(slide.content?.title || `Slide ${index + 1}`, {
-                            x: 0.5, y: 2, w: 9, h: 1, fontSize: 20, bold: true, color: selectedTheme.palette.primary, align: 'center'
-                        });
-                        fallbackSlide.addText('Content could not be displayed', {
-                            x: 0.5, y: 3.5, w: 9, h: 1, fontSize: 14, color: selectedTheme.palette.foreground, align: 'center'
-                        });
-                    } catch (fallbackError) {
-                        console.error(`Failed to create fallback slide ${index + 1}:`, fallbackError);
-                    }
-                }
-            });
-
+            
             setLoadingMessage('Finalizing presentation...');
             pptx.writeFile({ fileName: `${activeTemplate.title.replace(/\s+/g, '-')}-${selectedTheme.name.replace(/\s+/g, '-')}-presentation.pptx` });
         } catch (error) { 
@@ -530,7 +712,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
             }
         }
     };
-
+    
     const generatePdf = async () => {
         setLoadingMessage('Generating PDF...');
         setIsLoading(true);
@@ -553,7 +735,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
         const clonedContent = originalContent.cloneNode(true) as HTMLElement;
         clonedContent.id = 'pdf-clone-content'; // Avoid duplicate IDs
         container.appendChild(clonedContent);
-
+        
         try {
             const pdf = new jspdf.jsPDF({
                 orientation: 'p',
@@ -565,14 +747,14 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
             const pdfHeight = pdf.internal.pageSize.getHeight();
             const margin = 15;
             const contentWidth = pdfWidth - (margin * 2);
-
+            
             let yPosition = margin;
 
             const contentBlocks = Array.from(clonedContent.querySelectorAll('.pdf-content-block')) as HTMLElement[];
-
+            
             for (let i = 0; i < contentBlocks.length; i++) {
                 const block = contentBlocks[i];
-
+                
                 // Ensure images within the block are loaded before capture
                 const images = Array.from(block.getElementsByTagName('img'));
                 const imageLoadPromises = images.map(img => {
@@ -603,7 +785,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                     pdf.addPage();
                     yPosition = margin;
                 }
-
+                
                 pdf.addImage(imgData, 'PNG', margin, yPosition, contentWidth, imgHeight);
                 yPosition += imgHeight + 2; // Add a small gap between blocks
             }
@@ -691,7 +873,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                         </table>
                     </div>
                 );
-
+                
                 let photoGrids = null;
                 if (field.hasPhotoUploads) {
                     const photosToRender = value.filter((row: any) => row.photos && row.photos.length > 0);
@@ -723,7 +905,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                 return null;
         }
     };
-
+    
     if (!isOpen) return null;
 
     if (mode === 'pdf') {
@@ -773,7 +955,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
             </div>
         );
     }
-
+    
     // PPT Mode
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 sm:p-8" onClick={onClose}>
@@ -792,7 +974,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                 <div className="flex-grow flex flex-col md:flex-row overflow-hidden">
                     {/* Left Panel: Customization */}
                     <div className="w-full md:w-1/3 lg:w-1/4 bg-white p-6 border-r border-gray-200 overflow-y-auto space-y-6">
-
+                        
                         <div className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-lg">
                             <div className="flex items-center gap-2">
                                 <GeminiIcon />
@@ -821,7 +1003,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                 ))}
                             </CustomSelect>
                         </div>
-
+                        
                         <div className={!useAiFeatures ? 'opacity-50' : ''}>
                             <label className={`text-sm font-bold text-gray-600 mb-2 block flex items-center gap-2 ${!useAiFeatures ? 'cursor-not-allowed' : ''}`}>AI Visual Style <GeminiIcon /></label>
                             <CustomSelect value={aiVisualStyle} onChange={setAiVisualStyle} disabled={!useAiFeatures}>
