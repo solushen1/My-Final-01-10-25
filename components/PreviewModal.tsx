@@ -1,5 +1,3 @@
-
-
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import ReactDOM from 'react-dom/client';
 import type { ReportTemplate, Theme, SlideLayout, SlideOverrides, PhotoEnhancementPreset, SlideLayoutType, FormField } from '../types';
@@ -145,7 +143,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
         }
     };
 
-    
+
 
     // Check if local libraries are available
     useEffect(() => {
@@ -153,19 +151,19 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
             setLibsReady(false); // Reset when modal closes
             return;
         }
-        
+
         const checkLibraries = () => {
             const pptxExists = typeof PptxGenJS !== 'undefined';
             const reactDomExists = typeof ReactDOM !== 'undefined';
-            
+
             console.log('Library check:', {
                 PptxGenJS: pptxExists,
                 ReactDOM: reactDomExists
             });
-            
+
             return pptxExists && reactDomExists;
         };
-        
+
         // Since we're importing libraries directly, they should be available immediately
         if (checkLibraries()) {
             setLibsReady(true);
@@ -200,10 +198,10 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
 
     const slides = useMemo(() => {
         if (!libsReady) return [];
-        
+
         // Use the new universal slide resolver
         const resolvedSlides = getResolvedSlides(activeTemplate, formData);
-        
+
         return resolvedSlides;
     }, [activeTemplate, formData, libsReady]);
 
@@ -212,7 +210,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
         if (!useAiFeatures || photoOption === 'original' || !base64Image) {
             return Promise.resolve(base64Image);
         }
-        
+
         try {
             let prompt = '';
             if (photoOption === 'enhance') {
@@ -220,7 +218,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
             } else if (photoOption === 'removeBg') {
                 prompt = 'Remove the background from this photo, leaving only the main subject with a transparent background.';
             }
-            
+
             if (prompt) {
                 const result = await editImage(base64Image, prompt);
                 return result;
@@ -239,10 +237,10 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
             if (typeof color !== 'string' || !color || color.trim() === '') {
                 return fallback;
             }
-            
+
             // Clean the color string
             const cleanColor = color.trim();
-            
+
             // Handle hex colors
             if (cleanColor.startsWith('#')) {
                 const hexPart = cleanColor.substring(1);
@@ -255,7 +253,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                 }
                 return fallback;
             }
-            
+
             // Handle rgb/rgba colors - convert to hex
             if (cleanColor.startsWith('rgb')) {
                 const rgbValues = cleanColor.match(/\d+/g);
@@ -267,12 +265,12 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                 }
                 return fallback;
             }
-            
+
             // If it's already a hex string without #
             if (/^[0-9A-Fa-f]{6}$/.test(cleanColor)) {
                 return cleanColor.toUpperCase();
             }
-            
+
             // Handle common color names
             const colorNames: { [key: string]: string } = {
                 'black': '000000',
@@ -286,12 +284,12 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                 'gray': '808080',
                 'grey': '808080'
             };
-            
+
             const lowerColor = cleanColor.toLowerCase();
             if (colorNames[lowerColor]) {
                 return colorNames[lowerColor];
             }
-            
+
             // For any other format, use fallback
             return fallback;
         } catch (error) {
@@ -303,7 +301,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
     const generatePptx = async () => {
         setIsLoading(true);
         setLoadingMessage('Preparing Presentation...');
-        
+
         const generatedIcons: { [slideId: string]: string } = {};
 
         // Only generate AI assets if AI features are enabled and we have a good connection
@@ -323,7 +321,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                             // Don't fail the entire presentation for icon generation issues
                         }
                     });
-                
+
                 // Use Promise.allSettled to handle partial failures gracefully
                 await Promise.allSettled(iconGenerationPromises);
             } catch (error) {
@@ -345,9 +343,9 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
             if (typeof PptxGenJS === 'undefined') {
                 throw new Error('PptxGenJS library not available. Please refresh the page and try again.');
             }
-            
+
             const pptx = new PptxGenJS();
-            
+
             // Apply theme colors properly - ensure all colors are valid strings for PptxGenJS
             const themeColors = { 
                 background: sanitizeColor(selectedTheme.palette.background, 'FFFFFF'), 
@@ -356,9 +354,9 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                 secondary: sanitizeColor(selectedTheme.palette.secondary, '808080'),
                 accent: sanitizeColor(selectedTheme.palette.accent, 'FF6600')
             };
-            
+
             console.log('Theme colors sanitized:', themeColors);
-            
+
             pptx.defineLayout({ name: 'A4_LANDSCAPE', width: 11.69, height: 8.27 });
             pptx.layout = 'A4_LANDSCAPE';
 
@@ -371,10 +369,10 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
             for (let i = 0; i < slides.length; i++) {
                 const slideData = slides[i];
                 setLoadingMessage(`Creating slide ${i + 1} of ${slides.length}...`);
-                
+
                 try {
                     const slide = pptx.addSlide(); 
-                    
+
                     // Apply background - use simple color only to avoid issues
                     slide.background = { color: themeColors.background };
 
@@ -400,7 +398,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                             // Apply theme-specific title styling with enhanced visual design
                             const titleY = selectedTheme.category === 'Modern' ? 2.8 : 2.5;
                             const titleFontSize = selectedTheme.category === 'Modern' ? 52 : 44;
-                            
+
                             // Add background decoration for Modern themes
                             if (selectedTheme.category === 'Modern') {
                                 slide.addShape('rect', {
@@ -412,7 +410,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                     line: { width: 0 }
                                 });
                             }
-                            
+
                             slide.addText(slideData.title, { 
                                 x: 0.5, 
                                 y: titleY, 
@@ -432,7 +430,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                     opacity: 0.2 
                                 } : undefined
                             });
-                            
+
                             if (slideData.data.subtitle) {
                                 slide.addText(slideData.data.subtitle, { 
                                     x: 0.5, 
@@ -447,7 +445,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                     bold: selectedTheme.category === 'Modern'
                                 });
                             }
-                            
+
                             if (slideData.data.author) {
                                 slide.addText(`Prepared by: ${slideData.data.author}`, { 
                                     x: 0.5, 
@@ -462,7 +460,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                 });
                             }
                             break;
-                            
+
                         case 'twoColumn':
                             slide.addText(slideData.title, { 
                                 x: 0.5, 
@@ -486,7 +484,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                     autoPage: true,
                                     rowH: 0.4
                                 };
-                                
+
                                 // Style header row differently - ensure proper data structure
                                 const tableData = [
                                     slideData.data.table.headers.map((header: string) => ({
@@ -507,11 +505,11 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                         }))
                                     )
                                 ];
-                                
+
                                 slide.addTable(tableData, tableOptions);
                             }
                             break;
-                            
+
                         case 'imageLeftTextRight':
                             slide.addText(slideData.title, { 
                                 x: 0.5, 
@@ -543,7 +541,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                 const listText = Array.isArray(slideData.data.list) 
                                     ? slideData.data.list.filter(item => item && String(item).trim()).join('\n')
                                     : String(slideData.data.list);
-                                
+
                                 if (listText.trim()) {
                                     slide.addText(listText, { 
                                         x: 6.2, 
@@ -559,7 +557,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                 }
                             }
                             break;
-                            
+
                         case 'summary':
                             // Enhanced summary slide with theme-aware styling
                             slide.addText(slideData.title, { 
@@ -581,12 +579,12 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                     opacity: 0.15 
                                 } : undefined
                             });
-                            
+
                             slideData.data.kpis?.forEach((kpi: any, index: number) => {
                                 const kpiCount = slideData.data.kpis.length;
                                 const boxWidth = (11.69 - 1 - (0.5 * (kpiCount - 1))) / kpiCount;
                                 const xPos = 0.5 + index * (boxWidth + 0.5);
-                                
+
                                 // Add enhanced KPI background styling
                                 if (selectedTheme.category === 'Modern') {
                                     // Modern: gradient background with subtle shadow
@@ -617,7 +615,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                         line: { color: themeColors.primary, width: 2 }
                                     });
                                 }
-                                
+
                                 slide.addText(String(kpi.value), { 
                                     x: xPos, 
                                     y: selectedTheme.category === 'Modern' ? 3.1 : 3.2, 
@@ -638,7 +636,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                         opacity: 0.1 
                                     } : undefined
                                 });
-                                
+
                                 slide.addText(kpi.label, { 
                                     x: xPos, 
                                     y: selectedTheme.category === 'Modern' ? 4.7 : 4.8, 
@@ -654,7 +652,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                 });
                             });
                             break;
-                            
+
                         case 'photoGrid':
                             slide.addText(slideData.title, { 
                                 x: 0.5, 
@@ -687,7 +685,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                 }
                             }
                             break;
-                            
+
                         case 'chartFull':
                             slide.addText(slideData.title, { 
                                 x: 0.5, 
@@ -699,14 +697,14 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                 color: themeColors.primary, 
                                 fontFace: selectedTheme.fontPair.heading 
                             });
-                            
+
                             try {
                                 const chartDiv = document.createElement('div');
                                 chartDiv.style.width = '1000px';
                                 chartDiv.style.height = '600px';
                                 chartDiv.style.backgroundColor = selectedTheme.palette.background;
                                 chartContainer.appendChild(chartDiv);
-                                
+
                                 const chartRoot = ReactDOM.createRoot(chartDiv);
                                 await new Promise<void>(resolve => {
                                     chartRoot.render(<ChartSlide slide={slideData} theme={selectedTheme} />);
@@ -722,7 +720,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                         y: 1.2, 
                                         w: 9.69, 
                                         h: 5.8,
-                                        
+
                                     });
                                 }
                                 chartRoot.unmount();
@@ -732,7 +730,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                             }
                             break;
                     }
-                    
+
                     // Add slide number in theme colors
                     slide.addText(`${i + 1}`, {
                         x: 11,
@@ -744,18 +742,18 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                         align: 'center',
                         fontFace: selectedTheme.fontPair.body
                     });
-                    
+
                 } catch (error) {
                     console.error(`Error creating slide ${i + 1}:`, error);
-                    
+
                     // Try to create a fallback slide with minimal content
                     try {
                         const fallbackSlide = pptx.addSlide();
                         fallbackSlide.background = { color: themeColors.background };
-                        
+
                         // Safe title extraction
                         const slideTitle = (slideData && slideData.title) ? String(slideData.title) : `Slide ${i + 1}`;
-                        
+
                         fallbackSlide.addText(slideTitle, { 
                             x: 0.5, 
                             y: 3.5, 
@@ -783,7 +781,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                     }
                 }
             }
-            
+
             setLoadingMessage('Finalizing presentation...');
             pptx.writeFile({ fileName: `${activeTemplate.title.replace(/\s+/g, '-')}-${selectedTheme.name.replace(/\s+/g, '-')}-presentation.pptx` });
         } catch (error) { 
@@ -796,7 +794,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
             }
         }
     };
-    
+
     const generatePdf = async () => {
         setLoadingMessage('Generating PDF...');
         setIsLoading(true);
@@ -819,7 +817,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
         const clonedContent = originalContent.cloneNode(true) as HTMLElement;
         clonedContent.id = 'pdf-clone-content'; // Avoid duplicate IDs
         container.appendChild(clonedContent);
-        
+
         try {
             const pdf = new jspdf.jsPDF({
                 orientation: 'p',
@@ -831,14 +829,14 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
             const pdfHeight = pdf.internal.pageSize.getHeight();
             const margin = 15;
             const contentWidth = pdfWidth - (margin * 2);
-            
+
             let yPosition = margin;
 
             const contentBlocks = Array.from(clonedContent.querySelectorAll('.pdf-content-block')) as HTMLElement[];
-            
+
             for (let i = 0; i < contentBlocks.length; i++) {
                 const block = contentBlocks[i];
-                
+
                 // Ensure images within the block are loaded before capture
                 const images = Array.from(block.getElementsByTagName('img'));
                 const imageLoadPromises = images.map(img => {
@@ -869,7 +867,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                     pdf.addPage();
                     yPosition = margin;
                 }
-                
+
                 pdf.addImage(imgData, 'PNG', margin, yPosition, contentWidth, imgHeight);
                 yPosition += imgHeight + 2; // Add a small gap between blocks
             }
@@ -957,7 +955,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                         </table>
                     </div>
                 );
-                
+
                 let photoGrids = null;
                 if (field.hasPhotoUploads) {
                     const photosToRender = value.filter((row: any) => row.photos && row.photos.length > 0);
@@ -989,7 +987,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                 return null;
         }
     };
-    
+
     if (!isOpen) return null;
 
     if (mode === 'pdf') {
@@ -1014,9 +1012,17 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                             </CustomSelect>
                         </div>
                         <div className="flex-grow bg-gray-50 overflow-y-auto">
-                             <div id="pdf-preview-content" className="prose max-w-none p-8" style={{ fontFamily: `'${selectedTheme.fontPair.body}', sans-serif`, color: selectedTheme.palette.foreground, background: '#FFFFFF' }}>
+                             <div id="pdf-preview-content" className="prose max-w-none p-8" style={{ 
+                                 fontFamily: `'${selectedTheme.fontPair.body}', sans-serif`, 
+                                 color: selectedTheme.palette.foreground, 
+                                 background: selectedTheme.palette.background 
+                             }}>
                                <div className="pdf-content-block">
-                                    <h2 className="text-2xl font-bold text-center" style={{color: selectedTheme.palette.primary, fontFamily: `'${selectedTheme.fontPair.heading}', serif`}}>{activeTemplate.title}</h2>
+                                    <h2 className="text-2xl font-bold text-center" style={{
+                                        color: selectedTheme.palette.primary, 
+                                        fontFamily: `'${selectedTheme.fontPair.heading}', serif`,
+                                        textShadow: selectedTheme.category === 'Modern' ? '2px 2px 4px rgba(0,0,0,0.1)' : 'none'
+                                    }}>{activeTemplate.title}</h2>
                                </div>
                                 {activeTemplate.sections.map(section => (
                                     <div key={`preview-pdf-${section.id}`} className="mt-6">
@@ -1039,7 +1045,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
             </div>
         );
     }
-    
+
     // PPT Mode
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 sm:p-8" onClick={onClose}>
@@ -1058,7 +1064,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                 <div className="flex-grow flex flex-col md:flex-row overflow-hidden">
                     {/* Left Panel: Customization */}
                     <div className="w-full md:w-1/3 lg:w-1/4 bg-white p-6 border-r border-gray-200 overflow-y-auto space-y-6">
-                        
+
                         <div className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-lg">
                             <div className="flex items-center gap-2">
                                 <GeminiIcon />
@@ -1087,7 +1093,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                 ))}
                             </CustomSelect>
                         </div>
-                        
+
                         <div className={!useAiFeatures ? 'opacity-50' : ''}>
                             <label className={`text-sm font-bold text-gray-600 mb-2 block flex items-center gap-2 ${!useAiFeatures ? 'cursor-not-allowed' : ''}`}>AI Visual Style <GeminiIcon /></label>
                             <CustomSelect value={aiVisualStyle} onChange={setAiVisualStyle} disabled={!useAiFeatures}>
