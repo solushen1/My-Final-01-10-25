@@ -381,14 +381,24 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
             }
             
             const pptx = new PptxGenJS();
+            
+            // Apply theme colors properly
             const themeColors = { 
                 background: selectedTheme.palette.background.replace('#', ''), 
                 text: selectedTheme.palette.foreground.replace('#', ''), 
                 primary: selectedTheme.palette.primary.replace('#', ''), 
-                secondary: selectedTheme.palette.secondary.replace('#', '') 
+                secondary: selectedTheme.palette.secondary.replace('#', ''),
+                accent: selectedTheme.palette.accent.replace('#', '')
             };
+            
             pptx.defineLayout({ name: 'A4_LANDSCAPE', width: 11.69, height: 8.27 });
             pptx.layout = 'A4_LANDSCAPE';
+
+            // Set theme metadata
+            pptx.author = 'Adventist Report Generator';
+            pptx.company = 'Seventh-day Adventist Church';
+            pptx.subject = `${activeTemplate.title} - ${selectedTheme.name} Theme`;
+            pptx.title = activeTemplate.title;
 
             for (let i = 0; i < slides.length; i++) {
                 const slideData = slides[i];
@@ -396,12 +406,42 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                 
                 try {
                     const slide = pptx.addSlide(); 
-                    slide.background = { color: themeColors.background };
+                    
+                    // Apply theme background with gradient support
+                    if (selectedTheme.gradient && selectedTheme.gradient.length > 0) {
+                        // Extract gradient colors for PowerPoint
+                        const gradientMatch = selectedTheme.gradient[0].match(/linear-gradient\([^,]+,\s*([^,]+),\s*([^)]+)\)/);
+                        if (gradientMatch) {
+                            const color1 = gradientMatch[1].trim().replace('#', '');
+                            const color2 = gradientMatch[2].trim().replace('#', '');
+                            slide.background = { 
+                                fill: {
+                                    type: 'gradient',
+                                    angle: 45,
+                                    colors: [
+                                        { color: color1, position: 0 },
+                                        { color: color2, position: 100 }
+                                    ]
+                                }
+                            };
+                        } else {
+                            slide.background = { color: themeColors.background };
+                        }
+                    } else {
+                        slide.background = { color: themeColors.background };
+                    }
 
-                    // Add generated icon if available
+                    // Add generated icon if available and AI features enabled
                     if (useAiFeatures && generatedIcons[slideData.id]) {
                         try {
-                            slide.addImage({ data: generatedIcons[slideData.id], x: 10.8, y: 0.2, w: 0.6, h: 0.6 });
+                            slide.addImage({ 
+                                data: generatedIcons[slideData.id], 
+                                x: 10.8, 
+                                y: 0.2, 
+                                w: 0.6, 
+                                h: 0.6,
+                                transparency: 10
+                            });
                         } catch (error) {
                             console.error(`Error adding icon to slide ${slideData.id}:`, error);
                         }
@@ -409,78 +449,308 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
 
                     switch (slideData.layout) {
                         case 'title':
-                            slide.addText(slideData.title, { x: 0.5, y: 3, w: '90%', h: 1, fontSize: 44, bold: true, color: themeColors.primary, fontFace: selectedTheme.fontPair.heading, align: 'center' });
-                            if (slideData.data.subtitle) slide.addText(slideData.data.subtitle, { x: 0.5, y: 4.5, w: '90%', h: 0.5, fontSize: 18, color: themeColors.text, fontFace: selectedTheme.fontPair.body, align: 'center' });
-                            if (slideData.data.author) slide.addText(slideData.data.author, { x: 0.5, y: 5.0, w: '90%', h: 0.5, fontSize: 18, color: themeColors.text, fontFace: selectedTheme.fontPair.body, align: 'center' });
-                            break;
-                        case 'twoColumn':
-                            slide.addText(slideData.title, { x: 0.5, y: 0.25, w: '90%', h: 0.5, fontSize: 28, bold: true, color: themeColors.primary, fontFace: selectedTheme.fontPair.heading });
-                            if (slideData.data.table && slideData.data.table.rows && slideData.data.table.rows.length > 0) {
-                                slide.addTable([slideData.data.table.headers, ...slideData.data.table.rows], { x: 0.5, y: 1.0, w: '90%', border: { pt: 1, color: themeColors.secondary }, color: themeColors.text, fontFace: selectedTheme.fontPair.body, fill: { color: themeColors.background }, autoPage: true });
+                            // Apply theme-specific title styling
+                            slide.addText(slideData.title, { 
+                                x: 0.5, 
+                                y: 2.5, 
+                                w: '90%', 
+                                h: 2, 
+                                fontSize: selectedTheme.category === 'Modern' ? 48 : 44, 
+                                bold: true, 
+                                color: themeColors.primary, 
+                                fontFace: selectedTheme.fontPair.heading, 
+                                align: 'center',
+                                shadow: { type: 'outer', blur: 3, offset: 2, angle: 45, color: '888888', opacity: 0.6 }
+                            });
+                            if (slideData.data.subtitle) {
+                                slide.addText(slideData.data.subtitle, { 
+                                    x: 0.5, 
+                                    y: 4.5, 
+                                    w: '90%', 
+                                    h: 0.8, 
+                                    fontSize: selectedTheme.category === 'Modern' ? 20 : 18, 
+                                    color: themeColors.accent, 
+                                    fontFace: selectedTheme.fontPair.body, 
+                                    align: 'center',
+                                    italic: selectedTheme.category === 'Traditional'
+                                });
+                            }
+                            if (slideData.data.author) {
+                                slide.addText(`Prepared by: ${slideData.data.author}`, { 
+                                    x: 0.5, 
+                                    y: 6.5, 
+                                    w: '90%', 
+                                    h: 0.5, 
+                                    fontSize: 16, 
+                                    color: themeColors.text, 
+                                    fontFace: selectedTheme.fontPair.body, 
+                                    align: 'center' 
+                                });
                             }
                             break;
+                            
+                        case 'twoColumn':
+                            slide.addText(slideData.title, { 
+                                x: 0.5, 
+                                y: 0.25, 
+                                w: '90%', 
+                                h: 0.6, 
+                                fontSize: 32, 
+                                bold: true, 
+                                color: themeColors.primary, 
+                                fontFace: selectedTheme.fontPair.heading 
+                            });
+                            if (slideData.data.table && slideData.data.table.rows && slideData.data.table.rows.length > 0) {
+                                const tableOptions = {
+                                    x: 0.5, 
+                                    y: 1.2, 
+                                    w: '90%',
+                                    border: { pt: 1, color: themeColors.secondary },
+                                    color: themeColors.text,
+                                    fontFace: selectedTheme.fontPair.body,
+                                    fontSize: 12,
+                                    fill: { color: themeColors.background },
+                                    autoPage: true,
+                                    rowH: 0.4,
+                                    colW: 'auto'
+                                };
+                                
+                                // Style header row differently
+                                const tableData = [
+                                    slideData.data.table.headers.map((header: string) => ({
+                                        text: header,
+                                        options: { 
+                                            bold: true, 
+                                            color: themeColors.primary,
+                                            fill: { color: themeColors.accent },
+                                            fontFace: selectedTheme.fontPair.heading
+                                        }
+                                    })),
+                                    ...slideData.data.table.rows.map((row: string[], index: number) => 
+                                        row.map((cell: string) => ({
+                                            text: cell,
+                                            options: {
+                                                fill: { color: index % 2 === 0 ? themeColors.background : `${themeColors.accent}40` }
+                                            }
+                                        }))
+                                    )
+                                ];
+                                
+                                slide.addTable(tableData, tableOptions);
+                            }
+                            break;
+                            
                         case 'imageLeftTextRight':
-                            slide.addText(slideData.title, { x: 0.5, y: 0.25, w: '90%', h: 0.5, fontSize: 28, bold: true, color: themeColors.primary, fontFace: selectedTheme.fontPair.heading });
+                            slide.addText(slideData.title, { 
+                                x: 0.5, 
+                                y: 0.25, 
+                                w: '90%', 
+                                h: 0.6, 
+                                fontSize: 32, 
+                                bold: true, 
+                                color: themeColors.primary, 
+                                fontFace: selectedTheme.fontPair.heading 
+                            });
                             if (slideData.data.image) {
                                 try {
                                     const processedImage = await processImage(slideData.data.image);
-                                    slide.addImage({ data: processedImage, x: 0.5, y: 1.0, w: 5, h: 6 });
+                                    slide.addImage({ 
+                                        data: processedImage, 
+                                        x: 0.5, 
+                                        y: 1.2, 
+                                        w: 5.5, 
+                                        h: 5.8,
+                                        rounding: selectedTheme.category === 'Modern',
+                                        shadow: selectedTheme.category === 'Traditional' ? { 
+                                            type: 'outer', 
+                                            blur: 8, 
+                                            offset: 4, 
+                                            angle: 45, 
+                                            color: '666666', 
+                                            opacity: 0.5 
+                                        } : undefined
+                                    });
                                 } catch (error) {
                                     console.error('Error processing/adding image:', error);
                                 }
                             }
-                            if (slideData.data.list && slideData.data.list.length > 0) slide.addText(slideData.data.list, { x: 6.0, y: 1.0, w: 5.19, h: 6, color: themeColors.text, fontFace: selectedTheme.fontPair.body, bullet: true, fontSize: 12 });
+                            if (slideData.data.list && slideData.data.list.length > 0) {
+                                slide.addText(slideData.data.list, { 
+                                    x: 6.2, 
+                                    y: 1.2, 
+                                    w: 5, 
+                                    h: 5.8, 
+                                    color: themeColors.text, 
+                                    fontFace: selectedTheme.fontPair.body, 
+                                    bullet: true, 
+                                    fontSize: 14,
+                                    lineSpacing: selectedTheme.category === 'Modern' ? 20 : 16
+                                });
+                            }
                             break;
+                            
                         case 'summary':
-                            slide.addText(slideData.title, { x: 0.5, y: 0.25, w: '90%', h: 0.5, fontSize: 32, bold: true, color: themeColors.primary, fontFace: selectedTheme.fontPair.heading, align: 'center' });
+                            slide.addText(slideData.title, { 
+                                x: 0.5, 
+                                y: 0.25, 
+                                w: '90%', 
+                                h: 0.8, 
+                                fontSize: 36, 
+                                bold: true, 
+                                color: themeColors.primary, 
+                                fontFace: selectedTheme.fontPair.heading, 
+                                align: 'center' 
+                            });
                             slideData.data.kpis?.forEach((kpi: any, index: number) => {
                                 const kpiCount = slideData.data.kpis.length;
-                                const boxWidth = (11.69 - 1 - (0.5 * (kpiCount -1))) / kpiCount;
+                                const boxWidth = (11.69 - 1 - (0.5 * (kpiCount - 1))) / kpiCount;
                                 const xPos = 0.5 + index * (boxWidth + 0.5);
-                                slide.addText(String(kpi.value), { x: xPos, y: 3, w: boxWidth, h: 1.5, fontSize: 48, bold: true, color: themeColors.secondary, align: 'center', valign: 'middle' });
-                                slide.addText(kpi.label, { x: xPos, y: 4.5, w: boxWidth, h: 0.5, fontSize: 14, color: themeColors.text, align: 'center', valign: 'top' });
+                                
+                                // Add KPI background boxes for modern themes
+                                if (selectedTheme.category === 'Modern') {
+                                    slide.addShape('rect', {
+                                        x: xPos - 0.1,
+                                        y: 2.8,
+                                        w: boxWidth + 0.2,
+                                        h: 2.5,
+                                        fill: { color: `${themeColors.accent}20` },
+                                        line: { color: themeColors.secondary, width: 2 },
+                                        shadow: { type: 'outer', blur: 6, offset: 3, angle: 45, color: '999999', opacity: 0.4 }
+                                    });
+                                }
+                                
+                                slide.addText(String(kpi.value), { 
+                                    x: xPos, 
+                                    y: 3.2, 
+                                    w: boxWidth, 
+                                    h: 1.5, 
+                                    fontSize: selectedTheme.category === 'Modern' ? 52 : 48, 
+                                    bold: true, 
+                                    color: themeColors.secondary, 
+                                    align: 'center', 
+                                    valign: 'middle',
+                                    fontFace: selectedTheme.fontPair.heading
+                                });
+                                slide.addText(kpi.label, { 
+                                    x: xPos, 
+                                    y: 4.8, 
+                                    w: boxWidth, 
+                                    h: 0.6, 
+                                    fontSize: 16, 
+                                    color: themeColors.text, 
+                                    align: 'center', 
+                                    valign: 'top',
+                                    fontFace: selectedTheme.fontPair.body,
+                                    bold: selectedTheme.category === 'Modern'
+                                });
                             });
                             break;
+                            
                         case 'photoGrid':
-                            slide.addText(slideData.title, { x: 0.5, y: 0.25, w: '90%', h: 0.5, fontSize: 28, bold: true, color: themeColors.primary, fontFace: selectedTheme.fontPair.heading });
+                            slide.addText(slideData.title, { 
+                                x: 0.5, 
+                                y: 0.25, 
+                                w: '90%', 
+                                h: 0.6, 
+                                fontSize: 32, 
+                                bold: true, 
+                                color: themeColors.primary, 
+                                fontFace: selectedTheme.fontPair.heading 
+                            });
                             if (slideData.data.images) {
-                                const gridPositions = [ { x: 0.5, y: 1.0, w: 5, h: 3 }, { x: 6.19, y: 1.0, w: 5, h: 3 }, { x: 0.5, y: 4.5, w: 5, h: 3 }, { x: 6.19, y: 4.5, w: 5, h: 3 }, ];
+                                const gridPositions = [
+                                    { x: 0.5, y: 1.2, w: 5.5, h: 3 }, 
+                                    { x: 6.19, y: 1.2, w: 5, h: 3 }, 
+                                    { x: 0.5, y: 4.5, w: 5.5, h: 3 }, 
+                                    { x: 6.19, y: 4.5, w: 5, h: 3 }
+                                ];
                                 for(let imgIndex = 0; imgIndex < Math.min(slideData.data.images.length, 4); imgIndex++) {
                                     try {
                                         const processedImage = await processImage(slideData.data.images[imgIndex]);
-                                        slide.addImage({ data: processedImage, ...gridPositions[imgIndex] });
+                                        slide.addImage({ 
+                                            data: processedImage, 
+                                            ...gridPositions[imgIndex],
+                                            rounding: selectedTheme.category === 'Modern',
+                                            shadow: selectedTheme.category === 'Traditional' ? { 
+                                                type: 'outer', 
+                                                blur: 6, 
+                                                offset: 3, 
+                                                angle: 45, 
+                                                color: '888888', 
+                                                opacity: 0.5 
+                                            } : undefined
+                                        });
                                     } catch (error) {
                                         console.error(`Error processing image ${imgIndex}:`, error);
                                     }
                                 }
                             }
                             break;
+                            
                         case 'chartFull':
-                            slide.addText(slideData.title, { x: 0.5, y: 0.25, w: '90%', h: 0.5, fontSize: 28, bold: true, color: themeColors.primary, fontFace: selectedTheme.fontPair.heading });
+                            slide.addText(slideData.title, { 
+                                x: 0.5, 
+                                y: 0.25, 
+                                w: '90%', 
+                                h: 0.6, 
+                                fontSize: 32, 
+                                bold: true, 
+                                color: themeColors.primary, 
+                                fontFace: selectedTheme.fontPair.heading 
+                            });
                             
                             try {
                                 const chartDiv = document.createElement('div');
                                 chartDiv.style.width = '1000px';
                                 chartDiv.style.height = '600px';
+                                chartDiv.style.backgroundColor = selectedTheme.palette.background;
                                 chartContainer.appendChild(chartDiv);
                                 
                                 const chartRoot = ReactDOM.createRoot(chartDiv);
                                 await new Promise<void>(resolve => {
                                     chartRoot.render(<ChartSlide slide={slideData} theme={selectedTheme} />);
-                                    setTimeout(resolve, 500);
+                                    setTimeout(resolve, 1000); // Give more time for chart rendering
                                 });
 
                                 const canvas = chartDiv.querySelector('canvas');
                                 if (canvas) {
                                     const chartImage = canvas.toDataURL('image/png');
-                                    slide.addImage({ data: chartImage, x: 1, y: 1, w: 9.69, h: 5.45 });
+                                    slide.addImage({ 
+                                        data: chartImage, 
+                                        x: 1, 
+                                        y: 1.2, 
+                                        w: 9.69, 
+                                        h: 5.8,
+                                        shadow: selectedTheme.category === 'Traditional' ? { 
+                                            type: 'outer', 
+                                            blur: 8, 
+                                            offset: 4, 
+                                            angle: 45, 
+                                            color: '777777', 
+                                            opacity: 0.4 
+                                        } : undefined
+                                    });
                                 }
+                                chartRoot.unmount();
                                 chartContainer.removeChild(chartDiv);
                             } catch (error) {
                                 console.error('Error creating chart:', error);
                             }
                             break;
                     }
+                    
+                    // Add slide number in theme colors
+                    slide.addText(`${i + 1}`, {
+                        x: 11,
+                        y: 7.5,
+                        w: 0.5,
+                        h: 0.3,
+                        fontSize: 12,
+                        color: themeColors.secondary,
+                        align: 'center',
+                        fontFace: selectedTheme.fontPair.body
+                    });
+                    
                 } catch (error) {
                     console.error(`Error creating slide ${i + 1}:`, error);
                     // Continue with next slide
@@ -488,7 +758,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
             }
             
             setLoadingMessage('Finalizing presentation...');
-            pptx.writeFile({ fileName: `${activeTemplate.key}-presentation.pptx` });
+            pptx.writeFile({ fileName: `${activeTemplate.title.replace(/\s+/g, '-')}-${selectedTheme.name.replace(/\s+/g, '-')}-presentation.pptx` });
         } catch (error) { 
             console.error("Error generating PPTX:", error);
             alert("There was an error generating the PowerPoint presentation. Please try again.");
