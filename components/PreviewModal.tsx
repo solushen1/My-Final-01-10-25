@@ -235,34 +235,69 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
 
     // Helper function to ensure colors are valid strings for PptxGenJS
     const sanitizeColor = (color: any, fallback: string = 'FFFFFF'): string => {
-        if (typeof color !== 'string' || !color) {
-            return fallback;
-        }
-        // Handle hex colors
-        if (color.startsWith('#')) {
-            return color.substring(1, 7); // Remove # and limit to 6 chars
-        }
-        // Handle rgb/rgba colors - convert to hex
-        if (color.startsWith('rgb')) {
-            try {
-                const rgbValues = color.match(/\d+/g);
-                if (rgbValues && rgbValues.length >= 3) {
-                    const r = parseInt(rgbValues[0]);
-                    const g = parseInt(rgbValues[1]);
-                    const b = parseInt(rgbValues[2]);
-                    return ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
-                }
-            } catch (e) {
-                console.error('Error converting RGB to hex:', e);
+        try {
+            if (typeof color !== 'string' || !color || color.trim() === '') {
+                return fallback;
             }
+            
+            // Clean the color string
+            const cleanColor = color.trim();
+            
+            // Handle hex colors
+            if (cleanColor.startsWith('#')) {
+                const hexPart = cleanColor.substring(1);
+                // Ensure it's exactly 6 characters and valid hex
+                if (/^[0-9A-Fa-f]{6}$/.test(hexPart)) {
+                    return hexPart.toUpperCase();
+                } else if (/^[0-9A-Fa-f]{3}$/.test(hexPart)) {
+                    // Convert 3-char hex to 6-char
+                    return (hexPart[0] + hexPart[0] + hexPart[1] + hexPart[1] + hexPart[2] + hexPart[2]).toUpperCase();
+                }
+                return fallback;
+            }
+            
+            // Handle rgb/rgba colors - convert to hex
+            if (cleanColor.startsWith('rgb')) {
+                const rgbValues = cleanColor.match(/\d+/g);
+                if (rgbValues && rgbValues.length >= 3) {
+                    const r = Math.min(255, Math.max(0, parseInt(rgbValues[0])));
+                    const g = Math.min(255, Math.max(0, parseInt(rgbValues[1])));
+                    const b = Math.min(255, Math.max(0, parseInt(rgbValues[2])));
+                    return ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0').toUpperCase();
+                }
+                return fallback;
+            }
+            
+            // If it's already a hex string without #
+            if (/^[0-9A-Fa-f]{6}$/.test(cleanColor)) {
+                return cleanColor.toUpperCase();
+            }
+            
+            // Handle common color names
+            const colorNames: { [key: string]: string } = {
+                'black': '000000',
+                'white': 'FFFFFF',
+                'red': 'FF0000',
+                'green': '008000',
+                'blue': '0000FF',
+                'yellow': 'FFFF00',
+                'orange': 'FFA500',
+                'purple': '800080',
+                'gray': '808080',
+                'grey': '808080'
+            };
+            
+            const lowerColor = cleanColor.toLowerCase();
+            if (colorNames[lowerColor]) {
+                return colorNames[lowerColor];
+            }
+            
+            // For any other format, use fallback
+            return fallback;
+        } catch (error) {
+            console.error('Error sanitizing color:', color, error);
             return fallback;
         }
-        // If it's already a hex string without #
-        if (/^[0-9A-Fa-f]{6}$/.test(color)) {
-            return color;
-        }
-        // For any other format, use fallback
-        return fallback;
     };
 
     const generatePptx = async () => {
@@ -322,6 +357,8 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                 accent: sanitizeColor(selectedTheme.palette.accent, 'FF6600')
             };
             
+            console.log('Theme colors sanitized:', themeColors);
+            
             pptx.defineLayout({ name: 'A4_LANDSCAPE', width: 11.69, height: 8.27 });
             pptx.layout = 'A4_LANDSCAPE';
 
@@ -338,21 +375,8 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                 try {
                     const slide = pptx.addSlide(); 
                     
-                    // Apply background with gradient support for better visual appeal
-                    if (selectedTheme.gradient && selectedTheme.gradient.length > 0) {
-                        // Try to apply gradient, fall back to solid color if it fails
-                        try {
-                            slide.background = { 
-                                fill: selectedTheme.gradient[0].includes('gradient') ? 
-                                    { color: themeColors.background } : 
-                                    { color: themeColors.background }
-                            };
-                        } catch (error) {
-                            slide.background = { color: themeColors.background };
-                        }
-                    } else {
-                        slide.background = { color: themeColors.background };
-                    }
+                    // Apply background - use simple color only to avoid issues
+                    slide.background = { color: themeColors.background };
 
                     // Add generated icon if available and AI features enabled
                     if (useAiFeatures && generatedIcons[slideData.id]) {
@@ -454,7 +478,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                 const tableOptions = {
                                     x: 0.5, 
                                     y: 1.2, 
-                                    w: '90%' as any,
+                                    w: 10.69,
                                     border: { pt: 1, color: themeColors.secondary },
                                     color: themeColors.text,
                                     fontFace: selectedTheme.fontPair.body,
@@ -463,20 +487,23 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                     rowH: 0.4
                                 };
                                 
-                                // Style header row differently
+                                // Style header row differently - ensure proper data structure
                                 const tableData = [
                                     slideData.data.table.headers.map((header: string) => ({
-                                        text: header,
+                                        text: String(header || ''),
                                         options: { 
                                             bold: true, 
                                             color: themeColors.primary,
                                             fontFace: selectedTheme.fontPair.heading
                                         }
                                     })),
-                                    ...slideData.data.table.rows.map((row: string[], index: number) => 
+                                    ...slideData.data.table.rows.map((row: string[]) => 
                                         row.map((cell: string) => ({
-                                            text: cell,
-                                            options: {}
+                                            text: String(cell || ''),
+                                            options: {
+                                                color: themeColors.text,
+                                                fontFace: selectedTheme.fontPair.body
+                                            }
                                         }))
                                     )
                                 ];
@@ -512,17 +539,24 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                                 }
                             }
                             if (slideData.data.list && slideData.data.list.length > 0) {
-                                slide.addText(slideData.data.list, { 
-                                    x: 6.2, 
-                                    y: 1.2, 
-                                    w: 5, 
-                                    h: 5.8, 
-                                    color: themeColors.text, 
-                                    fontFace: selectedTheme.fontPair.body, 
-                                    bullet: true, 
-                                    fontSize: 14,
-                                    lineSpacing: selectedTheme.category === 'Modern' ? 20 : 16
-                                });
+                                // Ensure list data is properly formatted
+                                const listText = Array.isArray(slideData.data.list) 
+                                    ? slideData.data.list.filter(item => item && String(item).trim()).join('\n')
+                                    : String(slideData.data.list);
+                                
+                                if (listText.trim()) {
+                                    slide.addText(listText, { 
+                                        x: 6.2, 
+                                        y: 1.2, 
+                                        w: 5, 
+                                        h: 5.8, 
+                                        color: themeColors.text, 
+                                        fontFace: selectedTheme.fontPair.body, 
+                                        bullet: true, 
+                                        fontSize: 14,
+                                        lineSpacing: selectedTheme.category === 'Modern' ? 20 : 16
+                                    });
+                                }
                             }
                             break;
                             
@@ -718,10 +752,14 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                     try {
                         const fallbackSlide = pptx.addSlide();
                         fallbackSlide.background = { color: themeColors.background };
-                        fallbackSlide.addText(slideData.title || `Slide ${i + 1}`, { 
+                        
+                        // Safe title extraction
+                        const slideTitle = (slideData && slideData.title) ? String(slideData.title) : `Slide ${i + 1}`;
+                        
+                        fallbackSlide.addText(slideTitle, { 
                             x: 0.5, 
                             y: 3.5, 
-                            w: '90%', 
+                            w: 10.69, 
                             h: 1, 
                             fontSize: 24, 
                             bold: true, 
@@ -732,7 +770,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, mode, onClos
                         fallbackSlide.addText('Content could not be rendered', { 
                             x: 0.5, 
                             y: 4.5, 
-                            w: '90%', 
+                            w: 10.69, 
                             h: 0.5, 
                             fontSize: 16, 
                             color: themeColors.text, 
